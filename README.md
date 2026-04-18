@@ -7,13 +7,29 @@ project_root/
 │
 ├── data/
 │   ├── raw/
-│   │   ├── vgchartz_raw.csv        # Raw game sales figures from VGChartz
-│   │   ├── steam_api_raw.rds       # Game attributes from Steam Store API
-│   │   ├── steam_reviews_raw.rds   # Raw review text for sentiment analysis
-│   │   └── kaggle_vgsales.csv      # Static supplement for pre-2017 titles
-│   └── processed/
-│       ├── master_dataset.csv      # Final joined and encoded analysis-ready dataset
-│       └── sentiment_scores.csv    # Per-game aggregated sentiment metrics
+│   │   ├── console_sales_online.csv           # Combined online console-inclusive sales data
+│   │   ├── vgchartz_raw.csv                   # Standardized core sales dataset
+│   │   ├── publisher_market_sales_online.csv  # Publisher-year sales and market-share metrics
+│   │   ├── publisher_market_share_template.csv # Publisher-year market share table for joins
+│   │   ├── steam_api_raw.rds                  # Steam game attributes snapshot
+│   │   ├── steam_reviews_raw.rds              # Steam review text snapshot
+│   │   └── kaggle_vgsales.csv                 # Local copy/fallback of standardized sales data
+│   ├── processed/
+│       ├── master_dataset.csv        # Final joined and encoded analysis-ready dataset
+│       ├── sentiment_scores.csv      # Per-game aggregated sentiment metrics
+│       ├── key_variable_overview.csv # Coverage/stats summary of key variables
+│       └── publisher_overview.csv    # Publisher-level overview metrics
+│   └── plots/
+│       ├── games_by_genre_count.png
+│       ├── platform_weighted_global_sales.png
+│       ├── games_by_release_year_count.png
+│       ├── key_variables_missing_percentage.png
+│       ├── key_variables_non_missing_count.png
+│       ├── top_variables_missingness.png
+│       ├── specific_genre_competition_overview.png
+│       ├── top_publishers_total_global_sales.png
+│       ├── publisher_sales_overview_bubble.png
+│       └── top_publishers_market_share_trend.png
 │
 ├── scripts/
 │   ├── 01_data_scraping.R          # Collect raw data from VGChartz, Steam API, and Steam Reviews
@@ -26,3 +42,44 @@ project_root/
 │
 └── README.md
 ```
+
+## Data Sources
+
+This project uses a multi-source data pipeline combining online game-sales sources, Steam platform metadata, and repository-generated raw files.
+
+### 1. Console-inclusive game sales (online)
+
+- vgsales_andvise
+	- https://raw.githubusercontent.com/andvise/DataAnalyticsDatasets/main/vgsales.csv
+	- Used fields: title, platform, year, genre, publisher, regional sales, global sales.
+- vgsales_saemaqazi
+	- https://raw.githubusercontent.com/saemaqazi/vgsales.csv/main/vgsales.csv
+	- Used fields: title, platform, year, genre, publisher, regional sales, global sales.
+- vgchartz_2024
+	- https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv
+	- Used fields (normalized): title, console/platform, release date/year, genre, publisher, regional sales, global sales.
+
+### 2. Steam platform data (online)
+
+- SteamSpy API (game-level metadata)
+	- https://steamspy.com/api.php
+	- Used fields: appid, developer, publisher, owners, userscore, price, discount, ccu, genres, tags, release date, platform support.
+- Steam Store Reviews API (review-level text data)
+	- https://store.steampowered.com/appreviews/{appid}
+	- Used fields: review text, vote direction, vote counts, weighted vote score, timestamps.
+
+### 3. Raw data files generated in this repository
+
+- [data/raw/console_sales_online.csv](data/raw/console_sales_online.csv)
+	- Combined and standardized online console-inclusive sales records.
+- [data/raw/vgchartz_raw.csv](data/raw/vgchartz_raw.csv)
+	- Standardized sales base file used by curation.
+- [data/raw/publisher_market_sales_online.csv](data/raw/publisher_market_sales_online.csv)
+	- Publisher-year sales totals, game counts, and computed market share metrics.
+- [data/raw/publisher_market_share_template.csv](data/raw/publisher_market_share_template.csv)
+	- Publisher-year market share table used in joins during curation.
+- [data/raw/steam_api_raw.rds](data/raw/steam_api_raw.rds)
+	- Steam metadata snapshot.
+- [data/raw/steam_reviews_raw.rds](data/raw/steam_reviews_raw.rds)
+	- Steam review snapshot for sentiment feature construction.
+
