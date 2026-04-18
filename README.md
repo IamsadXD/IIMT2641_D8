@@ -22,6 +22,7 @@ project_root/
 │   └── plots/
 │       ├── games_by_genre_count.png
 │       ├── platform_weighted_global_sales.png
+│       ├── steam_review_percentage_trend.png
 │       ├── games_by_release_year_count.png
 │       ├── key_variables_missing_percentage.png
 │       ├── key_variables_non_missing_count.png
@@ -59,14 +60,16 @@ This project uses a multi-source data pipeline combining online game-sales sourc
 	- https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv
 	- Used fields (normalized): title, console/platform, release date/year, genre, publisher, regional sales, global sales.
 
-### 2. Steam platform data (online)
+### 2. Steam platform data (online, SteamKit workflow)
 
-- SteamSpy API (game-level metadata)
-	- https://steamspy.com/api.php
-	- Used fields: appid, developer, publisher, owners, userscore, price, discount, ccu, genres, tags, release date, platform support.
-- Steam Store Reviews API (review-level text data)
-	- https://store.steampowered.com/appreviews/{appid}
-	- Used fields: review text, vote direction, vote counts, weighted vote score, timestamps.
+- Steam app search endpoint (appid resolution from game title)
+	- https://steamcommunity.com/actions/SearchApps/{query}
+	- Used fields: appid and app name matching for sales-title linkage.
+- SteamKit-powered app info endpoint
+	- https://api.steamcmd.net/v1/info/{appid}
+	- Used fields: name, developer/publisher associations, review percentage, genres/tags identifiers, release date, and OS support.
+
+Note: Steam review text API is intentionally disabled in this pipeline. The file [data/raw/steam_reviews_raw.rds](data/raw/steam_reviews_raw.rds) is currently an empty placeholder unless a dedicated non-synthetic review source is configured.
 
 ### 3. Raw data files generated in this repository
 
