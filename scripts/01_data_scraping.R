@@ -29,6 +29,51 @@ parse_owner_midpoint <- function(owner_str) {
 	ifelse(is.na(low) | is.na(high), NA_real_, (low + high) / 2)
 }
 
+empty_steam_api_table <- function() {
+	tibble(
+		appid = integer(),
+		game_title = character(),
+		developer = character(),
+		publisher = character(),
+		score_rank = character(),
+		positive = numeric(),
+		negative = numeric(),
+		userscore = numeric(),
+		owners = character(),
+		average_forever = numeric(),
+		median_forever = numeric(),
+		price = numeric(),
+		initialprice = numeric(),
+		discount = numeric(),
+		ccu = numeric(),
+		genres = character(),
+		tags = character(),
+		languages = character(),
+		release_date = character(),
+		windows = logical(),
+		mac = logical(),
+		linux = logical()
+	)
+}
+
+empty_steam_reviews_table <- function() {
+	tibble(
+		appid = integer(),
+		review_id = character(),
+		review_text = character(),
+		voted_up = logical(),
+		votes_up = numeric(),
+		votes_funny = numeric(),
+		weighted_vote_score = numeric(),
+		comment_count = numeric(),
+		steam_purchase = logical(),
+		received_for_free = logical(),
+		written_during_early_access = logical(),
+		timestamp_created = numeric(),
+		author_num_reviews = numeric()
+	)
+}
+
 rename_first_existing <- function(df, target, candidates) {
 	matched <- intersect(candidates, names(df))
 	if (length(matched) > 0 && matched[1] != target) {
@@ -38,6 +83,13 @@ rename_first_existing <- function(df, target, candidates) {
 		df[[target]] <- NA
 	}
 	df
+}
+
+normalize_key <- function(x) {
+	x %>%
+		tolower() %>%
+		str_replace_all("[^a-z0-9]+", " ") %>%
+		str_squish()
 }
 
 standardize_sales_schema <- function(df) {
@@ -197,126 +249,651 @@ write_csv(
 	file.path(raw_dir, "publisher_market_share_template.csv")
 )
 
-message("[2/4] Pulling SteamSpy game attributes...")
+message("[2/4] Pulling Steam data via SteamKit-powered endpoints...")
+
+extract_association_names <- function(associations, assoc_type) {
+	if (length(associations) == 0) {
+		return(NA_character_)
+	}
+
+	vals <- character()
+	for (a in associations) {
+		a_type <- tolower(as.character(a$type %||% ""))
+		a_name <- str_squish(as.character(a$name %||% ""))
+		if (a_type == tolower(assoc_type) && a_name != "") {
+			vals <- c(vals, a_name)
+		}
+	}
+
+	vals <- unique(vals)
+	if (length(vals) == 0) NA_character_ else paste(vals, collapse = "|")
+}
+
+perform_json_request <- function(
+	endpoint,
+	timeout_seconds = 12,
+	max_tries = 2,
+	max_wait_seconds = 3
+) {
+	req <- request(endpoint) %>%
+		req_user_agent("IIMT2641_D8_SteamKit/1.0") %>%
+		req_timeout(timeout_seconds) %>%
+		req_retry(
+			max_tries = max_tries,
+			retry_on_failure = TRUE,
+			max_seconds = max_wait_seconds,
+			backoff = ~ runif(1, min = 0.3, max = 1.2)
+		)
+
+	try(req_perform(req), silent = TRUE)
+}
+
+build_title_variants <- function(title_value) {
+	base <- str_squish(as.character(title_value %||% ""))
+	if (base == "") {
+		return(character())
+	}
+
+	variant_1 <- str_squish(str_remove(base, "\\s*\\([^)]*\\)$"))
+	variant_2 <- str_squish(str_remove(variant_1, "\\s*[-:|].*$"))
+	variant_3 <- str_squish(str_replace_all(variant_2, "[^A-Za-z0-9 ]", " "))
+
+	unique(c(base, variant_1, variant_2, variant_3))
+}
+
+load_cache_csv <- function(file_path, required_cols) {
+	empty_cache <- tibble()
+	for (col_name in required_cols) {
+		empty_cache[[col_name]] <- character()
+	}
+
+	if (!file.exists(file_path)) {
+		return(empty_cache)
+	}
+
+	cache_candidate <- try(read_csv(file_path, show_col_types = FALSE, progress = FALSE), silent = TRUE)
+	if (inherits(cache_candidate, "try-error") || !is.data.frame(cache_candidate)) {
+		return(empty_cache)
+	}
+
+	cache_candidate <- as_tibble(cache_candidate)
+	for (col_name in required_cols) {
+		if (!(col_name %in% names(cache_candidate))) {
+			cache_candidate[[col_name]] <- NA
+		}
+	}
+
+	cache_candidate %>%
+		select(all_of(required_cols))
+}
+
+normalize_logical_flag <- function(x) {
+	x_chr <- tolower(str_squish(as.character(x)))
+	case_when(
+		x_chr %in% c("true", "t", "1", "yes", "y") ~ TRUE,
+		x_chr %in% c("false", "f", "0", "no", "n") ~ FALSE,
+		x_chr == "" | is.na(x_chr) ~ NA,
+		TRUE ~ as.logical(x)
+	)
+}
+
+search_steam_app <- function(title_value) {
+	title_variants <- build_title_variants(title_value)
+	if (length(title_variants) == 0) {
+		return(tibble())
+	}
+
+	fallback_result <- NULL
+
+	for (query_value in title_variants) {
+		if (nchar(query_value) < 2) {
+			next
+		}
+
+		endpoint <- sprintf(
+			"https://steamcommunity.com/actions/SearchApps/%s",
+			utils::URLencode(query_value, reserved = TRUE)
+		)
+
+		res <- perform_json_request(
+			endpoint,
+			timeout_seconds = 8,
+			max_tries = 2,
+			max_wait_seconds = 2
+		)
+		if (inherits(res, "try-error")) {
+			next
+		}
+
+		payload <- try(fromJSON(resp_body_string(res), simplifyVector = TRUE), silent = TRUE)
+		if (inherits(payload, "try-error") || length(payload) == 0) {
+			next
+		}
+
+		results <- as_tibble(payload)
+		if (nrow(results) == 0 || !all(c("appid", "name") %in% names(results))) {
+			next
+		}
+
+		search_key <- normalize_key(title_value)
+		result_keys <- normalize_key(results$name)
+
+		distance_raw <- as.numeric(adist(search_key, result_keys))
+		normalizer <- pmax(nchar(search_key), nchar(result_keys), 1)
+		distance_scaled <- distance_raw / normalizer
+		chosen_idx <- which.min(distance_scaled)
+
+		if (length(chosen_idx) == 0 || is.infinite(distance_scaled[chosen_idx])) {
+			next
+		}
+
+		if (!is.na(distance_scaled[chosen_idx]) && distance_scaled[chosen_idx] <= 0.45) {
+			return(tibble(
+				search_title = title_value,
+				appid = suppressWarnings(as.integer(results$appid[chosen_idx])),
+				steam_name = as.character(results$name[chosen_idx])
+			))
+		}
+
+		if (!is.na(distance_scaled[chosen_idx]) && distance_scaled[chosen_idx] <= 0.65) {
+			fallback_result <- tibble(
+				search_title = title_value,
+				appid = suppressWarnings(as.integer(results$appid[chosen_idx])),
+				steam_name = as.character(results$name[chosen_idx])
+			)
+		}
+
+		if (is.null(fallback_result) && nrow(results) > 0) {
+			fallback_result <- tibble(
+				search_title = title_value,
+				appid = suppressWarnings(as.integer(results$appid[1])),
+				steam_name = as.character(results$name[1])
+			)
+		}
+	}
+
+	if (!is.null(fallback_result)) {
+		return(fallback_result)
+	}
+
+	tibble()
+}
+
+fetch_steamkit_info <- function(appid_value) {
+	endpoint <- sprintf("https://api.steamcmd.net/v1/info/%s", appid_value)
+	res <- perform_json_request(
+		endpoint,
+		timeout_seconds = 8,
+		max_tries = 2,
+		max_wait_seconds = 2
+	)
+
+	if (inherits(res, "try-error")) {
+		return(tibble())
+	}
+
+	payload <- try(fromJSON(resp_body_string(res), simplifyVector = FALSE), silent = TRUE)
+	if (inherits(payload, "try-error") || is.null(payload$data)) {
+		return(tibble())
+	}
+
+	app_node <- payload$data[[as.character(appid_value)]]
+	if (is.null(app_node)) {
+		return(tibble())
+	}
+
+	common <- app_node$common %||% list()
+	associations <- common$associations %||% list()
+	genre_values <- unname(unlist(common$genres %||% list(), use.names = FALSE))
+	tag_values <- unname(unlist(common$store_tags %||% list(), use.names = FALSE))
+	oslist <- tolower(as.character(common$oslist %||% ""))
+	release_unix <- suppressWarnings(as.numeric(common$steam_release_date %||% NA_real_))
+
+	tibble(
+		appid = suppressWarnings(as.integer(appid_value)),
+		steam_name = as.character(common$name %||% NA_character_),
+		developer = extract_association_names(associations, "developer"),
+		publisher = extract_association_names(associations, "publisher"),
+		score_rank = NA_character_,
+		positive = NA_real_,
+		negative = NA_real_,
+		userscore = suppressWarnings(as.numeric(common$review_percentage %||% NA_real_)),
+		owners = NA_character_,
+		average_forever = NA_real_,
+		median_forever = NA_real_,
+		price = NA_real_,
+		initialprice = NA_real_,
+		discount = NA_real_,
+		ccu = NA_real_,
+		genres = if (length(genre_values) == 0) NA_character_ else paste(unique(genre_values), collapse = "|"),
+		tags = if (length(tag_values) == 0) NA_character_ else paste(unique(tag_values), collapse = "|"),
+		languages = NA_character_,
+		release_date = ifelse(
+			is.na(release_unix),
+			NA_character_,
+			format(as.POSIXct(release_unix, origin = "1970-01-01", tz = "UTC"), "%m/%d/%Y")
+		),
+		windows = str_detect(oslist, "windows"),
+		mac = str_detect(oslist, "mac"),
+		linux = str_detect(oslist, "linux")
+	)
+}
 
 steam_api_raw <- NULL
 steam_api_live <- FALSE
-steamspy_result <- try(
-	request("https://steamspy.com/api.php") %>%
-		req_url_query(request = "all") %>%
-		req_user_agent("IIMT2641_D8_DataCollection/1.0") %>%
-		req_perform(),
-	silent = TRUE
-)
 
-if (!inherits(steamspy_result, "try-error")) {
-	steamspy_text <- resp_body_string(steamspy_result)
-	steamspy_list <- fromJSON(steamspy_text, simplifyVector = FALSE)
+if (!is.null(vg_data) && nrow(vg_data) > 0) {
+	max_title_queries <- suppressWarnings(as.integer(Sys.getenv("STEAM_MAX_TITLE_QUERIES", "0")))
+	max_appid_fetches <- suppressWarnings(as.integer(Sys.getenv("STEAM_MAX_APPID_FETCHES", "0")))
+	retry_not_found_titles <- identical(Sys.getenv("STEAM_RETRY_NOT_FOUND", "0"), "1")
 
-	steam_api_raw <- imap_dfr(steamspy_list, function(game, appid_chr) {
-		tag_names <- names(game$tags %||% list())
-		tibble(
-			appid = suppressWarnings(as.integer(appid_chr)),
-			game_title = game$name %||% NA_character_,
-			developer = game$developer %||% NA_character_,
-			publisher = game$publisher %||% NA_character_,
-			score_rank = game$score_rank %||% NA_character_,
-			positive = suppressWarnings(as.numeric(game$positive %||% NA_real_)),
-			negative = suppressWarnings(as.numeric(game$negative %||% NA_real_)),
-			userscore = suppressWarnings(as.numeric(game$userscore %||% NA_real_)),
-			owners = game$owners %||% NA_character_,
-			average_forever = suppressWarnings(as.numeric(game$average_forever %||% NA_real_)),
-			median_forever = suppressWarnings(as.numeric(game$median_forever %||% NA_real_)),
-			price = suppressWarnings(as.numeric(game$price %||% NA_real_)) / 100,
-			initialprice = suppressWarnings(as.numeric(game$initialprice %||% NA_real_)) / 100,
-			discount = suppressWarnings(as.numeric(game$discount %||% NA_real_)),
-			ccu = suppressWarnings(as.numeric(game$ccu %||% NA_real_)),
-			genres = game$genres %||% NA_character_,
-			tags = if (length(tag_names) == 0) NA_character_ else paste(tag_names, collapse = "|"),
-			languages = game$languages %||% NA_character_,
-			release_date = game$release_date %||% NA_character_,
-			windows = as.logical(game$windows %||% NA),
-			mac = as.logical(game$mac %||% NA),
-			linux = as.logical(game$linux %||% NA)
-		)
-	}) %>%
+	if (is.na(max_title_queries) || max_title_queries < 0) {
+		max_title_queries <- 0
+	}
+	if (is.na(max_appid_fetches) || max_appid_fetches < 0) {
+		max_appid_fetches <- 0
+	}
+
+	title_pool <- vg_data %>%
+		filter(!is.na(game_title), game_title != "") %>%
 		mutate(
-			game_title = str_squish(game_title),
-			developer = str_squish(developer),
-			publisher = str_squish(publisher),
-			genres = str_squish(genres),
-			languages = str_squish(languages)
+			global_sales = suppressWarnings(as.numeric(global_sales)),
+			platform = as.character(platform),
+			release_year = suppressWarnings(as.integer(release_year)),
+			is_pc_like = str_detect(toupper(coalesce(platform, "")), "PC|WIN|MAC|LINUX|STEAM"),
+			is_recent = !is.na(release_year) & release_year >= 2010
+		) %>%
+		arrange(desc(is_pc_like), desc(is_recent), desc(coalesce(global_sales, 0))) %>%
+		distinct(game_title, .keep_all = TRUE)
+
+	pc_titles <- title_pool %>%
+		filter(is_pc_like) %>%
+		pull(game_title)
+
+	other_titles <- title_pool %>%
+		filter(!is_pc_like) %>%
+		pull(game_title)
+
+	title_candidates_full <- unique(c(pc_titles, other_titles))
+	title_candidates <- if (max_title_queries > 0) {
+		head(title_candidates_full, max_title_queries)
+	} else {
+		title_candidates_full
+	}
+
+	message(
+		"SteamKit title queries planned: ",
+		length(title_candidates),
+		" (",
+		ifelse(max_title_queries > 0, "limited", "all available"),
+		")"
+	)
+
+	steam_match_cache_path <- file.path(raw_dir, "steam_match_cache.csv")
+	steam_match_cache <- load_cache_csv(
+		steam_match_cache_path,
+		required_cols = c("search_title", "appid", "steam_name")
+	) %>%
+		mutate(
+			search_title = str_squish(as.character(search_title)),
+			appid = suppressWarnings(as.integer(appid)),
+			steam_name = str_squish(as.character(steam_name))
+		) %>%
+		filter(!is.na(search_title), search_title != "", !is.na(appid)) %>%
+		distinct(search_title, appid, .keep_all = TRUE)
+
+	steam_attempt_cache_path <- file.path(raw_dir, "steam_search_attempt_cache.csv")
+	steam_attempt_cache <- load_cache_csv(
+		steam_attempt_cache_path,
+		required_cols = c("search_title", "status", "last_attempt_utc", "appid", "steam_name")
+	) %>%
+		mutate(
+			search_title = str_squish(as.character(search_title)),
+			status = str_squish(as.character(status)),
+			last_attempt_utc = as.character(last_attempt_utc),
+			appid = suppressWarnings(as.integer(appid)),
+			steam_name = str_squish(as.character(steam_name))
+		) %>%
+		filter(!is.na(search_title), search_title != "") %>%
+		distinct(search_title, .keep_all = TRUE)
+
+	if (nrow(steam_match_cache) > 0) {
+		seed_from_matches <- steam_match_cache %>%
+			select(search_title, appid, steam_name) %>%
+			mutate(
+				status = "matched",
+				last_attempt_utc = format(Sys.time(), tz = "UTC", usetz = TRUE)
+			)
+
+		steam_attempt_cache <- bind_rows(steam_attempt_cache, seed_from_matches) %>%
+			arrange(desc(status == "matched")) %>%
+			distinct(search_title, .keep_all = TRUE)
+	}
+
+	attempted_titles <- if (retry_not_found_titles) {
+		steam_attempt_cache %>%
+			filter(status == "matched") %>%
+			pull(search_title)
+	} else {
+		steam_attempt_cache$search_title
+	}
+
+	pending_titles <- setdiff(title_candidates, unique(attempted_titles))
+	message(
+		"SteamKit title cache: ",
+		nrow(steam_match_cache),
+		" matches already cached, ",
+		nrow(steam_attempt_cache),
+		" attempts recorded, ",
+		length(pending_titles),
+		" titles pending",
+		ifelse(retry_not_found_titles, " (retrying prior not_found titles)", "")
+	)
+
+	steam_match_new_list <- vector("list", length(pending_titles))
+	steam_attempt_new_list <- vector("list", length(pending_titles))
+	if (length(pending_titles) > 0) {
+		for (idx in seq_along(pending_titles)) {
+			title_value <- pending_titles[[idx]]
+			if (idx %% 25 == 0 || idx == length(pending_titles)) {
+				message("SteamKit search progress: ", idx, "/", length(pending_titles), " pending titles")
+			}
+
+			search_result <- search_steam_app(title_value)
+			steam_match_new_list[[idx]] <- search_result
+
+			if (nrow(search_result) > 0) {
+				steam_attempt_new_list[[idx]] <- search_result %>%
+					transmute(
+						search_title = str_squish(as.character(search_title)),
+						status = "matched",
+						last_attempt_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+						appid = suppressWarnings(as.integer(appid)),
+						steam_name = str_squish(as.character(steam_name))
+					)
+			} else {
+				steam_attempt_new_list[[idx]] <- tibble(
+					search_title = title_value,
+					status = "not_found",
+					last_attempt_utc = format(Sys.time(), tz = "UTC", usetz = TRUE),
+					appid = NA_integer_,
+					steam_name = NA_character_
+				)
+			}
+
+			if (idx %% 100 == 0 || idx == length(pending_titles)) {
+				steam_match_snapshot <- bind_rows(steam_match_cache, bind_rows(steam_match_new_list)) %>%
+					filter(!is.na(appid), !is.na(search_title), search_title != "") %>%
+					distinct(search_title, appid, .keep_all = TRUE)
+
+				steam_attempt_snapshot <- bind_rows(steam_attempt_cache, bind_rows(steam_attempt_new_list)) %>%
+					mutate(
+						search_title = str_squish(as.character(search_title)),
+						status = str_squish(as.character(status)),
+						last_attempt_utc = as.character(last_attempt_utc),
+						appid = suppressWarnings(as.integer(appid)),
+						steam_name = str_squish(as.character(steam_name))
+					) %>%
+					filter(!is.na(search_title), search_title != "") %>%
+					arrange(desc(status == "matched")) %>%
+					distinct(search_title, .keep_all = TRUE)
+
+				write_csv(steam_match_snapshot, steam_match_cache_path)
+				write_csv(steam_attempt_snapshot, steam_attempt_cache_path)
+			}
+		}
+	}
+
+	steam_match_table <- bind_rows(steam_match_cache, bind_rows(steam_match_new_list)) %>%
+		filter(!is.na(appid), !is.na(search_title), search_title != "") %>%
+		distinct(search_title, appid, .keep_all = TRUE)
+
+	steam_attempt_table <- bind_rows(steam_attempt_cache, bind_rows(steam_attempt_new_list)) %>%
+		mutate(
+			search_title = str_squish(as.character(search_title)),
+			status = str_squish(as.character(status)),
+			last_attempt_utc = as.character(last_attempt_utc),
+			appid = suppressWarnings(as.integer(appid)),
+			steam_name = str_squish(as.character(steam_name))
+		) %>%
+		filter(!is.na(search_title), search_title != "") %>%
+		arrange(desc(status == "matched")) %>%
+		distinct(search_title, .keep_all = TRUE)
+
+	write_csv(steam_match_table, steam_match_cache_path)
+	write_csv(steam_attempt_table, steam_attempt_cache_path)
+
+	message("SteamKit total matched title->appid pairs: ", nrow(steam_match_table))
+
+	if (nrow(steam_match_table) > 0) {
+		appids_ranked <- steam_match_table %>%
+			count(appid, sort = TRUE) %>%
+			pull(appid)
+		appids_to_fetch <- if (max_appid_fetches > 0) {
+			head(appids_ranked, max_appid_fetches)
+		} else {
+			appids_ranked
+		}
+
+		steam_info_cache_path <- file.path(raw_dir, "steam_info_cache.csv")
+		steam_info_cache <- load_cache_csv(
+			steam_info_cache_path,
+			required_cols = c(
+				"appid",
+				"steam_name",
+				"developer",
+				"publisher",
+				"score_rank",
+				"positive",
+				"negative",
+				"userscore",
+				"owners",
+				"average_forever",
+				"median_forever",
+				"price",
+				"initialprice",
+				"discount",
+				"ccu",
+				"genres",
+				"tags",
+				"languages",
+				"release_date",
+				"windows",
+				"mac",
+				"linux"
+			)
+		) %>%
+			mutate(
+				appid = suppressWarnings(as.integer(appid)),
+				steam_name = str_squish(as.character(steam_name)),
+				developer = str_squish(as.character(developer)),
+				publisher = str_squish(as.character(publisher)),
+				score_rank = str_squish(as.character(score_rank)),
+				positive = suppressWarnings(as.numeric(positive)),
+				negative = suppressWarnings(as.numeric(negative)),
+				userscore = suppressWarnings(as.numeric(userscore)),
+				owners = str_squish(as.character(owners)),
+				average_forever = suppressWarnings(as.numeric(average_forever)),
+				median_forever = suppressWarnings(as.numeric(median_forever)),
+				price = suppressWarnings(as.numeric(price)),
+				initialprice = suppressWarnings(as.numeric(initialprice)),
+				discount = suppressWarnings(as.numeric(discount)),
+				ccu = suppressWarnings(as.numeric(ccu)),
+				genres = str_squish(as.character(genres)),
+				tags = str_squish(as.character(tags)),
+				languages = str_squish(as.character(languages)),
+				release_date = str_squish(as.character(release_date)),
+				windows = normalize_logical_flag(windows),
+				mac = normalize_logical_flag(mac),
+				linux = normalize_logical_flag(linux)
+			) %>%
+			filter(!is.na(appid)) %>%
+			distinct(appid, .keep_all = TRUE)
+
+		pending_appids <- setdiff(appids_to_fetch, steam_info_cache$appid)
+
+		message(
+			"SteamKit app detail fetch planned: ",
+			length(appids_to_fetch),
+			" of ",
+			n_distinct(steam_match_table$appid),
+			" matched appids (",
+			ifelse(max_appid_fetches > 0, "limited", "all available"),
+			")"
 		)
-	steam_api_live <- TRUE
-} else {
-	message("SteamSpy API unreachable.")
+		message(
+			"SteamKit app cache: ",
+			nrow(steam_info_cache),
+			" appids already cached, ",
+			length(pending_appids),
+			" appids pending"
+		)
+
+		steam_info_new_list <- vector("list", length(pending_appids))
+		if (length(pending_appids) > 0) {
+			for (idx in seq_along(pending_appids)) {
+				appid_value <- pending_appids[[idx]]
+				if (idx %% 20 == 0 || idx == length(pending_appids)) {
+					message("SteamKit app detail progress: ", idx, "/", length(pending_appids), " pending appids")
+				}
+
+				steam_info_new_list[[idx]] <- fetch_steamkit_info(appid_value)
+
+				if (idx %% 50 == 0 || idx == length(pending_appids)) {
+					steam_info_snapshot <- bind_rows(steam_info_cache, bind_rows(steam_info_new_list)) %>%
+						mutate(
+							appid = suppressWarnings(as.integer(appid)),
+							steam_name = str_squish(as.character(steam_name)),
+							developer = str_squish(as.character(developer)),
+							publisher = str_squish(as.character(publisher)),
+							score_rank = str_squish(as.character(score_rank)),
+							positive = suppressWarnings(as.numeric(positive)),
+							negative = suppressWarnings(as.numeric(negative)),
+							userscore = suppressWarnings(as.numeric(userscore)),
+							owners = str_squish(as.character(owners)),
+							average_forever = suppressWarnings(as.numeric(average_forever)),
+							median_forever = suppressWarnings(as.numeric(median_forever)),
+							price = suppressWarnings(as.numeric(price)),
+							initialprice = suppressWarnings(as.numeric(initialprice)),
+							discount = suppressWarnings(as.numeric(discount)),
+							ccu = suppressWarnings(as.numeric(ccu)),
+							genres = str_squish(as.character(genres)),
+							tags = str_squish(as.character(tags)),
+							languages = str_squish(as.character(languages)),
+							release_date = str_squish(as.character(release_date)),
+							windows = normalize_logical_flag(windows),
+							mac = normalize_logical_flag(mac),
+							linux = normalize_logical_flag(linux)
+						) %>%
+						filter(!is.na(appid)) %>%
+						distinct(appid, .keep_all = TRUE)
+					write_csv(steam_info_snapshot, steam_info_cache_path)
+				}
+			}
+		}
+
+		steam_info_raw <- bind_rows(steam_info_cache, bind_rows(steam_info_new_list)) %>%
+			mutate(
+				appid = suppressWarnings(as.integer(appid)),
+				steam_name = str_squish(as.character(steam_name)),
+				developer = str_squish(as.character(developer)),
+				publisher = str_squish(as.character(publisher)),
+				score_rank = str_squish(as.character(score_rank)),
+				positive = suppressWarnings(as.numeric(positive)),
+				negative = suppressWarnings(as.numeric(negative)),
+				userscore = suppressWarnings(as.numeric(userscore)),
+				owners = str_squish(as.character(owners)),
+				average_forever = suppressWarnings(as.numeric(average_forever)),
+				median_forever = suppressWarnings(as.numeric(median_forever)),
+				price = suppressWarnings(as.numeric(price)),
+				initialprice = suppressWarnings(as.numeric(initialprice)),
+				discount = suppressWarnings(as.numeric(discount)),
+				ccu = suppressWarnings(as.numeric(ccu)),
+				genres = str_squish(as.character(genres)),
+				tags = str_squish(as.character(tags)),
+				languages = str_squish(as.character(languages)),
+				release_date = str_squish(as.character(release_date)),
+				windows = normalize_logical_flag(windows),
+				mac = normalize_logical_flag(mac),
+				linux = normalize_logical_flag(linux)
+			) %>%
+			filter(!is.na(appid)) %>%
+			distinct(appid, .keep_all = TRUE)
+
+		write_csv(steam_info_raw, steam_info_cache_path)
+
+		steam_api_raw <- steam_match_table %>%
+			left_join(steam_info_raw, by = "appid") %>%
+			transmute(
+				appid = appid,
+				game_title = str_squish(as.character(search_title)),
+				developer = str_squish(as.character(developer)),
+				publisher = str_squish(as.character(publisher)),
+				score_rank = score_rank,
+				positive = positive,
+				negative = negative,
+				userscore = userscore,
+				owners = owners,
+				average_forever = average_forever,
+				median_forever = median_forever,
+				price = price,
+				initialprice = initialprice,
+				discount = discount,
+				ccu = ccu,
+				genres = genres,
+				tags = tags,
+				languages = languages,
+				release_date = release_date,
+				windows = as.logical(windows),
+				mac = as.logical(mac),
+				linux = as.logical(linux)
+			) %>%
+			filter(!is.na(appid), !is.na(game_title), game_title != "") %>%
+			distinct(appid, .keep_all = TRUE)
+
+		steam_api_live <- nrow(steam_api_raw) > 0
+		if (steam_api_live) {
+			message("SteamKit pull completed with matched titles: ", nrow(steam_api_raw))
+		}
+	}
 }
 
-if (is.null(steam_api_raw)) {
+if (is.null(steam_api_raw) || nrow(steam_api_raw) == 0) {
 	existing_steam_path <- file.path(raw_dir, "steam_api_raw.rds")
 	if (file.exists(existing_steam_path)) {
-		steam_api_raw <- readRDS(existing_steam_path)
-		message("Loaded existing steam_api_raw.rds from local data/raw.")
-		steam_api_live <- FALSE
+		steam_candidate <- readRDS(existing_steam_path)
+		if (!is.data.frame(steam_candidate)) {
+			message("Existing steam_api_raw.rds is invalid. Using empty Steam table.")
+			steam_api_raw <- empty_steam_api_table()
+		} else {
+			steam_candidate <- as_tibble(steam_candidate)
+			title_values <- as.character(steam_candidate$game_title %||% character())
+			synthetic_title_ratio <- if (length(title_values) > 0) {
+				mean(str_detect(title_values, "^game_\\d+$"), na.rm = TRUE)
+			} else {
+				0
+			}
+
+			if (is.finite(synthetic_title_ratio) && synthetic_title_ratio >= 0.9) {
+				message("Existing steam_api_raw.rds appears synthetic and will not be used.")
+				steam_api_raw <- empty_steam_api_table()
+			} else {
+				steam_api_raw <- steam_candidate
+				message("Loaded existing steam_api_raw.rds from local data/raw.")
+			}
+		}
 	} else {
-		message("No live or local Steam data available. Generating synthetic Steam dataset for offline use.")
-		set.seed(2641)
-		n_games <- 2500
-		publishers <- c("Electronic Arts", "Ubisoft", "Activision", "Square Enix", "Capcom", "Bandai Namco", "Sega", "Indie Studio")
-		developers <- c("EA Vancouver", "Ubisoft Montreal", "Infinity Ward", "Larian Studios", "CD Projekt", "Bethesda", "FromSoftware", "Remedy")
-		genre_pool <- c("Action", "Adventure", "RPG", "Simulation", "Strategy", "Sports", "Racing", "Shooter")
-		language_pool <- c("English", "English,French,German", "English,Japanese", "English,Chinese")
-
-		low_owners <- sample(seq(1000, 450000, by = 1000), n_games, replace = TRUE)
-		high_owners <- low_owners + sample(seq(1000, 700000, by = 1000), n_games, replace = TRUE)
-
-		steam_api_raw <- tibble(
-			appid = seq(100001L, by = 1L, length.out = n_games),
-			game_title = sprintf("game_%04d", seq_len(n_games)),
-			developer = sample(developers, n_games, replace = TRUE),
-			publisher = sample(publishers, n_games, replace = TRUE),
-			score_rank = NA_character_,
-			positive = sample(0:60000, n_games, replace = TRUE),
-			negative = sample(0:20000, n_games, replace = TRUE),
-			userscore = sample(30:95, n_games, replace = TRUE),
-			owners = paste0(low_owners, " .. ", high_owners),
-			average_forever = sample(0:5000, n_games, replace = TRUE),
-			median_forever = sample(0:2500, n_games, replace = TRUE),
-			price = round(runif(n_games, min = 0, max = 69.99), 2),
-			initialprice = round(runif(n_games, min = 9.99, max = 79.99), 2),
-			discount = sample(c(0, 5, 10, 20, 30, 40, 50, 60, 75), n_games, replace = TRUE),
-			ccu = sample(0:80000, n_games, replace = TRUE),
-			genres = sample(genre_pool, n_games, replace = TRUE),
-			tags = sample(c("Singleplayer|Story Rich", "Multiplayer|Competitive", "Open World|RPG", "Casual|Indie"), n_games, replace = TRUE),
-			languages = sample(language_pool, n_games, replace = TRUE),
-			release_date = format(sample(seq(as.Date("2000-01-01"), as.Date("2025-12-31"), by = "day"), n_games, replace = TRUE), "%m/%d/%Y"),
-			windows = TRUE,
-			mac = sample(c(TRUE, FALSE), n_games, replace = TRUE, prob = c(0.35, 0.65)),
-			linux = sample(c(TRUE, FALSE), n_games, replace = TRUE, prob = c(0.18, 0.82))
-		)
-		steam_api_live <- FALSE
+		message("No SteamKit data available and no valid local Steam cache found. Saving empty Steam table.")
+		steam_api_raw <- empty_steam_api_table()
 	}
+
+	steam_api_live <- FALSE
 }
 
 saveRDS(steam_api_raw, file.path(raw_dir, "steam_api_raw.rds"))
 
 if (is.null(vg_data) || nrow(vg_data) == 0) {
-	message("No public/local VG CSV source available. Building a Steam-derived proxy sales table.")
-
-	vg_data <- steam_api_raw %>%
-		transmute(
-			game_title = game_title,
-			release_year = suppressWarnings(as.integer(str_extract(release_date, "\\d{4}"))),
-			genre = ifelse(is.na(genres), "Unknown", str_split_fixed(genres, ",", 2)[, 1]),
-			publisher = publisher,
-			platform = "PC",
-			global_sales = parse_owner_midpoint(owners) / 1000000,
-			na_sales = global_sales * 0.42,
-			eu_sales = global_sales * 0.32,
-			jp_sales = global_sales * 0.12,
-			other_sales = global_sales * 0.14
-		) %>%
-		filter(!is.na(game_title), game_title != "")
+	stop("No real game-sales dataset available from online sources or local cache. Synthetic fallback is disabled.")
 }
 
 vg_data <- standardize_sales_schema(vg_data)
@@ -329,115 +906,33 @@ if (file.exists(file.path(raw_dir, "kaggle_vgsales.csv"))) {
 	write_csv(vg_data, file.path(raw_dir, "kaggle_vgsales.csv"))
 }
 
-message("[3/4] Pulling Steam review sample for sentiment analysis...")
+message("[3/4] Building Steam review summary rows from SteamKit metadata...")
 
-top_apps <- steam_api_raw %>%
-	mutate(total_votes = coalesce(positive, 0) + coalesce(negative, 0)) %>%
-	arrange(desc(total_votes), desc(ccu)) %>%
-	filter(!is.na(appid)) %>%
-	slice_head(n = 150) %>%
-	pull(appid)
-
-fetch_reviews_for_app <- function(appid_value) {
-	endpoint <- sprintf("https://store.steampowered.com/appreviews/%s", appid_value)
-
-	res <- try(
-		request(endpoint) %>%
-			req_url_query(
-				json = 1,
-				num_per_page = 100,
-				language = "all",
-				filter = "updated",
-				purchase_type = "all"
-			) %>%
-			req_user_agent("IIMT2641_D8_DataCollection/1.0") %>%
-			req_perform(),
-		silent = TRUE
-	)
-
-	if (inherits(res, "try-error")) {
-		return(tibble())
-	}
-
-	payload <- try(fromJSON(resp_body_string(res), simplifyVector = FALSE), silent = TRUE)
-	if (inherits(payload, "try-error") || is.null(payload$reviews)) {
-		return(tibble())
-	}
-
-	reviews <- payload$reviews
-	if (length(reviews) == 0) {
-		return(tibble())
-	}
-
-	map_dfr(reviews, function(r) {
-		author_votes <- NA_real_
-		if (!is.null(r$author) && !is.null(r$author$num_reviews)) {
-			author_votes <- suppressWarnings(as.numeric(r$author$num_reviews))
-		}
-
-		tibble(
-			appid = as.integer(appid_value),
-			review_id = r$recommendationid %||% NA_character_,
-			review_text = r$review %||% NA_character_,
-			voted_up = as.logical(r$voted_up %||% NA),
-			votes_up = suppressWarnings(as.numeric(r$votes_up %||% NA_real_)),
-			votes_funny = suppressWarnings(as.numeric(r$votes_funny %||% NA_real_)),
-			weighted_vote_score = suppressWarnings(as.numeric(r$weighted_vote_score %||% NA_real_)),
-			comment_count = suppressWarnings(as.numeric(r$comment_count %||% NA_real_)),
-			steam_purchase = as.logical(r$steam_purchase %||% NA),
-			received_for_free = as.logical(r$received_for_free %||% NA),
-			written_during_early_access = as.logical(r$written_during_early_access %||% NA),
-			timestamp_created = suppressWarnings(as.numeric(r$timestamp_created %||% NA_real_)),
-			author_num_reviews = author_votes
+if (nrow(steam_api_raw) > 0) {
+	steam_reviews_raw <- steam_api_raw %>%
+		transmute(
+			appid = as.integer(appid),
+			review_id = paste0("steamkit_summary_", as.integer(appid)),
+			review_text = NA_character_,
+			voted_up = ifelse(is.na(userscore), NA, userscore >= 70),
+			votes_up = NA_real_,
+			votes_funny = NA_real_,
+			weighted_vote_score = ifelse(is.na(userscore), NA_real_, userscore / 100),
+			comment_count = NA_real_,
+			steam_purchase = NA,
+			received_for_free = NA,
+			written_during_early_access = NA,
+			timestamp_created = suppressWarnings(as.numeric(as.POSIXct(release_date, format = "%m/%d/%Y", tz = "UTC"))),
+			author_num_reviews = NA_real_
 		)
-	})
-}
 
-if (steam_api_live) {
-	steam_reviews_raw <- map_dfr(top_apps, fetch_reviews_for_app)
+	steam_reviews_raw <- bind_rows(
+		empty_steam_reviews_table(),
+		steam_reviews_raw
+	)
 } else {
-	set.seed(2641)
-	synthetic_n <- 5000
-	sampled_appids <- sample(top_apps, synthetic_n, replace = TRUE)
-	positive_flag <- sample(c(TRUE, FALSE), synthetic_n, replace = TRUE, prob = c(0.72, 0.28))
-	steam_reviews_raw <- tibble(
-		appid = sampled_appids,
-		review_id = paste0("synthetic_", seq_len(synthetic_n)),
-		review_text = ifelse(
-			positive_flag,
-			"Great gameplay and strong replay value.",
-			"Needs optimization and better balancing."
-		),
-		voted_up = positive_flag,
-		votes_up = sample(0:2000, synthetic_n, replace = TRUE),
-		votes_funny = sample(0:500, synthetic_n, replace = TRUE),
-		weighted_vote_score = round(runif(synthetic_n, min = 0.2, max = 0.98), 3),
-		comment_count = sample(0:200, synthetic_n, replace = TRUE),
-		steam_purchase = TRUE,
-		received_for_free = sample(c(TRUE, FALSE), synthetic_n, replace = TRUE, prob = c(0.1, 0.9)),
-		written_during_early_access = sample(c(TRUE, FALSE), synthetic_n, replace = TRUE, prob = c(0.2, 0.8)),
-		timestamp_created = as.numeric(as.POSIXct("2024-01-01", tz = "UTC")) + sample(0:60000000, synthetic_n, replace = TRUE),
-		author_num_reviews = sample(1:50, synthetic_n, replace = TRUE)
-	)
-}
-
-if (nrow(steam_reviews_raw) == 0) {
-	message("No Steam reviews returned; writing an empty placeholder review table.")
-	steam_reviews_raw <- tibble(
-		appid = integer(),
-		review_id = character(),
-		review_text = character(),
-		voted_up = logical(),
-		votes_up = numeric(),
-		votes_funny = numeric(),
-		weighted_vote_score = numeric(),
-		comment_count = numeric(),
-		steam_purchase = logical(),
-		received_for_free = logical(),
-		written_during_early_access = logical(),
-		timestamp_created = numeric(),
-		author_num_reviews = numeric()
-	)
+	steam_reviews_raw <- empty_steam_reviews_table()
+	message("No SteamKit metadata rows available. Writing empty steam_reviews_raw.rds.")
 }
 
 saveRDS(steam_reviews_raw, file.path(raw_dir, "steam_reviews_raw.rds"))

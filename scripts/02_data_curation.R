@@ -372,6 +372,35 @@ plot_platform_mix <- master_dataset %>%
 	theme_minimal(base_size = 13)
 save_plot(plot_platform_mix, "platform_weighted_global_sales.png")
 
+steam_plot_data <- steam_clean %>%
+	filter(!is.na(userscore), !is.na(steam_release_year), is.finite(userscore)) %>%
+	mutate(
+		deployment_type = case_when(
+			windows & (mac | linux) ~ "cross_platform",
+			windows & !(mac | linux) ~ "windows_only",
+			mac | linux ~ "non_windows",
+			TRUE ~ "unknown"
+		)
+	)
+
+if (nrow(steam_plot_data) >= 10) {
+	plot_steam_userscore_trend <- steam_plot_data %>%
+		ggplot(aes(x = steam_release_year, y = userscore, color = deployment_type)) +
+		geom_point(alpha = 0.45) +
+		geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
+		scale_y_continuous(labels = label_number(accuracy = 1)) +
+		labs(
+			title = "Steam Review Percentage by Release Year",
+			x = "Steam Release Year",
+			y = "Review Percentage",
+			color = "Platform Support"
+		) +
+		theme_minimal(base_size = 13)
+	save_plot(plot_steam_userscore_trend, "steam_review_percentage_trend.png")
+} else {
+	message("Skipping steam_review_percentage_trend.png due to insufficient Steam data.")
+}
+
 publisher_overview <- master_dataset %>%
 	filter(!is.na(publisher), publisher != "") %>%
 	group_by(publisher) %>%
