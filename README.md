@@ -33,13 +33,13 @@ project_root/
 │       └── top_publishers_market_share_trend.png
 │
 ├── scripts/
-│   ├── 01_data_scraping.R          # Collect raw data from VGChartz, Steam API, and Steam Reviews
-│   ├── 02_data_curation.R          # Join, clean, encode variables; plot overviews to justify decisions
-│   ├── 03_sentiment_analysis.R     # Score review text and append sentiment features to master dataset
-│   ├── 04_pca.R                    # Reduce correlated predictors; visualise predictor structure
-│   ├── 05_clustering.R             # Segment games into market tiers; append cluster as a predictor
+│   ├── 01_data_scraping.R          # Collect raw data from VGChartz, Steam API, and Steam Reviews - Jacob
+│   ├── 02_data_curation.R          # Join, clean, encode variables; plot overviews to justify decisions - Jacob
+│   ├── 03_sentiment_analysis.R     # Score review text and append sentiment features to master dataset - William
+│   ├── 04_pca.R                    # Reduce correlated predictors; visualise predictor structure - Mike
+│   ├── 05_clustering.R             # Segment games into market tiers; append cluster as a predictor - Mike
 │   ├── 06_regression.R             # Predict sales volume (linear) and commercial success (logistic) - Daniel
-│   └── 07_cart.R                   # Validate regression findings; rank pre-launch attributes by importance
+│   └── 07_cart.R                   # Validate regression findings; rank pre-launch attributes by importance - Min
 │
 └── README.md
 ```
