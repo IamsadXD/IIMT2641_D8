@@ -442,12 +442,46 @@ fetch_steamkit_info <- function(appid_value) {
 		return(tibble())
 	}
 
+	store_endpoint <- sprintf(
+		"https://store.steampowered.com/api/appdetails?appids=%s&cc=us&l=en",
+		appid_value
+	)
+	store_res <- perform_json_request(
+		store_endpoint,
+		timeout_seconds = 8,
+		max_tries = 2,
+		max_wait_seconds = 2
+	)
+
+	store_data <- NULL
+	if (!inherits(store_res, "try-error")) {
+		store_payload <- try(fromJSON(resp_body_string(store_res), simplifyVector = FALSE), silent = TRUE)
+		if (!inherits(store_payload, "try-error")) {
+			store_node <- store_payload[[as.character(appid_value)]] %||% list()
+			if (isTRUE(store_node$success) && !is.null(store_node$data)) {
+				store_data <- store_node$data
+			}
+		}
+	}
+
 	common <- app_node$common %||% list()
 	associations <- common$associations %||% list()
 	genre_values <- unname(unlist(common$genres %||% list(), use.names = FALSE))
 	tag_values <- unname(unlist(common$store_tags %||% list(), use.names = FALSE))
 	oslist <- tolower(as.character(common$oslist %||% ""))
 	release_unix <- suppressWarnings(as.numeric(common$steam_release_date %||% NA_real_))
+
+	price_overview <- store_data$price_overview %||% list()
+	is_free <- isTRUE(store_data$is_free)
+	price_initial_cents <- suppressWarnings(as.numeric(price_overview$initial %||% NA_real_))
+	discount_pct <- suppressWarnings(as.numeric(price_overview$discount_percent %||% NA_real_))
+
+	# Use non-discounted list price as a release-price proxy to avoid sale price volatility.
+	list_price_usd <- if (is_free) {
+		0
+	} else {
+		price_initial_cents / 100
+	}
 
 	tibble(
 		appid = suppressWarnings(as.integer(appid_value)),
@@ -461,9 +495,9 @@ fetch_steamkit_info <- function(appid_value) {
 		owners = NA_character_,
 		average_forever = NA_real_,
 		median_forever = NA_real_,
-		price = NA_real_,
-		initialprice = NA_real_,
-		discount = NA_real_,
+		price = list_price_usd,
+		initialprice = list_price_usd,
+		discount = discount_pct,
 		ccu = NA_real_,
 		genres = if (length(genre_values) == 0) NA_character_ else paste(unique(genre_values), collapse = "|"),
 		tags = if (length(tag_values) == 0) NA_character_ else paste(unique(tag_values), collapse = "|"),
@@ -476,6 +510,47 @@ fetch_steamkit_info <- function(appid_value) {
 		windows = str_detect(oslist, "windows"),
 		mac = str_detect(oslist, "mac"),
 		linux = str_detect(oslist, "linux")
+	)
+}
+
+fetch_store_price_info <- function(appid_value) {
+	endpoint <- sprintf(
+		"https://store.steampowered.com/api/appdetails?appids=%s&cc=us&l=en&filters=price_overview,is_free",
+		appid_value
+	)
+	res <- perform_json_request(
+		endpoint,
+		timeout_seconds = 6,
+		max_tries = 1,
+		max_wait_seconds = 1
+	)
+
+	if (inherits(res, "try-error")) {
+		return(tibble())
+	}
+
+	payload <- try(fromJSON(resp_body_string(res), simplifyVector = FALSE), silent = TRUE)
+	if (inherits(payload, "try-error") || is.null(payload[[as.character(appid_value)]])) {
+		return(tibble())
+	}
+
+	store_node <- payload[[as.character(appid_value)]] %||% list()
+	if (!isTRUE(store_node$success)) {
+		return(tibble())
+	}
+
+	data_node <- store_node$data %||% list()
+	price_overview <- data_node$price_overview %||% list()
+	is_free <- isTRUE(data_node$is_free)
+	initial_cents <- suppressWarnings(as.numeric(price_overview$initial %||% NA_real_))
+	discount_pct <- suppressWarnings(as.numeric(price_overview$discount_percent %||% NA_real_))
+	list_price_usd <- if (is_free) 0 else initial_cents / 100
+
+	tibble(
+		appid = suppressWarnings(as.integer(appid_value)),
+		price = list_price_usd,
+		initialprice = list_price_usd,
+		discount = discount_pct
 	)
 }
 
@@ -760,7 +835,7 @@ if (!is.null(vg_data) && nrow(vg_data) > 0) {
 				steam_info_new_list[[idx]] <- fetch_steamkit_info(appid_value)
 
 				if (idx %% 50 == 0 || idx == length(pending_appids)) {
-					steam_info_snapshot <- bind_rows(steam_info_cache, bind_rows(steam_info_new_list)) %>%
+					steam_info_snapshot <- bind_rows(bind_rows(steam_info_new_list), steam_info_cache) %>%
 						mutate(
 							appid = suppressWarnings(as.integer(appid)),
 							steam_name = str_squish(as.character(steam_name)),
@@ -792,7 +867,7 @@ if (!is.null(vg_data) && nrow(vg_data) > 0) {
 			}
 		}
 
-		steam_info_raw <- bind_rows(steam_info_cache, bind_rows(steam_info_new_list)) %>%
+		steam_info_raw <- bind_rows(bind_rows(steam_info_new_list), steam_info_cache) %>%
 			mutate(
 				appid = suppressWarnings(as.integer(appid)),
 				steam_name = str_squish(as.character(steam_name)),
@@ -818,6 +893,125 @@ if (!is.null(vg_data) && nrow(vg_data) > 0) {
 				linux = normalize_logical_flag(linux)
 			) %>%
 			filter(!is.na(appid)) %>%
+			distinct(appid, .keep_all = TRUE)
+
+		all_matched_appids <- steam_match_table %>%
+			pull(appid) %>%
+			suppressWarnings(as.integer()) %>%
+			unique()
+		priced_appids <- steam_info_raw %>%
+			filter(!is.na(price) | !is.na(initialprice)) %>%
+			pull(appid) %>%
+			suppressWarnings(as.integer()) %>%
+			unique()
+		store_price_pending <- setdiff(all_matched_appids, priced_appids)
+		max_price_fetches <- suppressWarnings(as.integer(Sys.getenv("STEAM_MAX_PRICE_FETCHES", "0")))
+		if (is.na(max_price_fetches) || max_price_fetches < 0) {
+			max_price_fetches <- 0
+		}
+		if (max_price_fetches > 0) {
+			store_price_pending <- head(store_price_pending, max_price_fetches)
+		}
+
+		message(
+			"Steam Store price fetch pending appids: ",
+			length(store_price_pending),
+			" (",
+			ifelse(max_price_fetches > 0, "limited", "all available"),
+			")"
+		)
+
+		store_price_list <- vector("list", length(store_price_pending))
+		if (length(store_price_pending) > 0) {
+			for (idx in seq_along(store_price_pending)) {
+				appid_value <- store_price_pending[[idx]]
+				if (idx %% 200 == 0 || idx == length(store_price_pending)) {
+					message("Steam Store price progress: ", idx, "/", length(store_price_pending), " pending appids")
+				}
+
+				store_price_list[[idx]] <- fetch_store_price_info(appid_value)
+
+				if (idx %% 500 == 0 || idx == length(store_price_pending)) {
+					store_price_snapshot <- bind_rows(store_price_list)
+					if (nrow(store_price_snapshot) > 0) {
+						steam_info_snapshot <- bind_rows(
+							steam_info_raw,
+							store_price_snapshot %>%
+								mutate(
+									steam_name = NA_character_,
+									developer = NA_character_,
+									publisher = NA_character_,
+									score_rank = NA_character_,
+									positive = NA_real_,
+									negative = NA_real_,
+									userscore = NA_real_,
+									owners = NA_character_,
+									average_forever = NA_real_,
+									median_forever = NA_real_,
+									ccu = NA_real_,
+									genres = NA_character_,
+									tags = NA_character_,
+									languages = NA_character_,
+									release_date = NA_character_,
+									windows = NA,
+									mac = NA,
+									linux = NA
+								)
+						) %>%
+							arrange(desc(!is.na(price))) %>%
+							distinct(appid, .keep_all = TRUE)
+
+						write_csv(steam_info_snapshot, steam_info_cache_path)
+					}
+				}
+			}
+		}
+
+		store_price_table <- bind_rows(store_price_list)
+		if (nrow(store_price_table) == 0 || !("appid" %in% names(store_price_table))) {
+			store_price_table <- tibble(
+				appid = integer(),
+				price = numeric(),
+				initialprice = numeric(),
+				discount = numeric()
+			)
+		} else {
+			store_price_table <- store_price_table %>%
+				mutate(
+					appid = suppressWarnings(as.integer(appid)),
+					price = suppressWarnings(as.numeric(price)),
+					initialprice = suppressWarnings(as.numeric(initialprice)),
+					discount = suppressWarnings(as.numeric(discount))
+				) %>%
+				filter(!is.na(appid)) %>%
+				distinct(appid, .keep_all = TRUE)
+		}
+
+		steam_info_raw <- bind_rows(
+			steam_info_raw,
+			store_price_table %>%
+				mutate(
+					steam_name = NA_character_,
+					developer = NA_character_,
+					publisher = NA_character_,
+					score_rank = NA_character_,
+					positive = NA_real_,
+					negative = NA_real_,
+					userscore = NA_real_,
+					owners = NA_character_,
+					average_forever = NA_real_,
+					median_forever = NA_real_,
+					ccu = NA_real_,
+					genres = NA_character_,
+					tags = NA_character_,
+					languages = NA_character_,
+					release_date = NA_character_,
+					windows = NA,
+					mac = NA,
+					linux = NA
+				)
+		) %>%
+			arrange(desc(!is.na(price))) %>%
 			distinct(appid, .keep_all = TRUE)
 
 		write_csv(steam_info_raw, steam_info_cache_path)

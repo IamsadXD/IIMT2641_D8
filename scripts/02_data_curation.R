@@ -333,12 +333,22 @@ master_dataset <- master_dataset %>%
 		specific_genre = factor(specific_genre)
 	)
 
+all_missing_cols <- names(master_dataset)[vapply(master_dataset, function(col) all(is.na(col)), logical(1))]
+if (length(all_missing_cols) > 0) {
+	message(
+		"Dropping columns with 100% missing values: ",
+		paste(all_missing_cols, collapse = ", ")
+	)
+	master_dataset <- master_dataset %>%
+		select(-all_of(all_missing_cols))
+}
+
 write_csv(master_dataset, file.path(processed_dir, "master_dataset.csv"))
 
 message("[5/6] Building overview plots for numeric, categorical, temporal, and text-derived features...")
 
 plot_top_genre <- master_dataset %>%
-	filter(!is.na(genre), genre != "") %>%
+	filter(!is.na(genre), genre != "", str_to_lower(genre) != "other") %>%
 	group_by(genre) %>%
 	summarise(game_count = n(), .groups = "drop") %>%
 	filter(game_count >= 20) %>%
@@ -358,6 +368,7 @@ save_plot(plot_top_genre, "games_by_genre_count.png")
 plot_platform_mix <- master_dataset %>%
 	filter(!is.na(platform), platform != "") %>%
 	mutate(platform = fct_lump_n(platform, n = 10, other_level = "Other")) %>%
+	filter(platform != "Other") %>%
 	count(platform, wt = global_sales, name = "weighted_sales") %>%
 	mutate(platform = fct_reorder(platform, weighted_sales)) %>%
 	ggplot(aes(x = platform, y = weighted_sales, fill = platform)) +
@@ -507,6 +518,8 @@ key_numeric_vars <- c(
 	"competitors"
 )
 
+key_numeric_vars <- intersect(key_numeric_vars, names(master_dataset))
+
 key_variable_overview <- master_dataset %>%
 	summarise(
 		across(
@@ -557,7 +570,7 @@ plot_key_non_missing <- key_variable_overview %>%
 save_plot(plot_key_non_missing, "key_variables_non_missing_count.png")
 
 plot_specific_genre_competition <- master_dataset %>%
-	filter(!is.na(specific_genre), !is.na(competitors)) %>%
+	filter(!is.na(specific_genre), !is.na(competitors), as.character(specific_genre) != "other") %>%
 	group_by(specific_genre) %>%
 	summarise(avg_competitors = mean(competitors, na.rm = TRUE), n = n(), .groups = "drop") %>%
 	filter(n >= 20) %>%
