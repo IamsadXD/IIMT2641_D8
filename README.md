@@ -38,7 +38,7 @@ project_root/
 │   ├── 03_sentiment_analysis.R     # Score review text and append sentiment features to master dataset
 │   ├── 04_pca.R                    # Reduce correlated predictors; visualise predictor structure
 │   ├── 05_clustering.R             # Segment games into market tiers; append cluster as a predictor
-│   ├── 06_regression.R             # Predict sales volume (linear) and commercial success (logistic)
+│   ├── 06_regression.R             # Predict sales volume (linear) and commercial success (logistic) - Daniel
 │   └── 07_cart.R                   # Validate regression findings; rank pre-launch attributes by importance
 │
 └── README.md
