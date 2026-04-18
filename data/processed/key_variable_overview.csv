@@ -1,0 +1,12 @@
+variable,non_missing,missing_pct,mean,median,min,max
+global_sales,22766,65.98,0.4537327593780199,0.13,0,82.74
+na_sales,19969,70.16,0.25135660273423804,0.08,0,41.49
+eu_sales,20413,69.5,0.13914711213442416,0.02,0,29.02
+jp_sales,19059,71.52,0.08050842121832205,0,0,10.22
+other_sales,21255,68.24,0.04372571159727123,0.01,0,10.57
+price,0,100,NA,NA,NA,NA
+userscore,0,100,NA,NA,NA,NA
+ccu,0,100,NA,NA,NA,NA
+owner_midpoint,0,100,NA,NA,NA,NA
+review_count,0,100,NA,NA,NA,NA
+competitors,59643,10.87,384.1572690843854,257,0,1555
