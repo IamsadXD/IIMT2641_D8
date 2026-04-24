@@ -20,6 +20,7 @@ project_root/
 │       ├── key_variable_overview.csv # Coverage/stats summary of key variables
 │       └── publisher_overview.csv    # Publisher-level overview metrics
 │   └── plots/
+|       ├── sentiment_analysis/
 │       ├── games_by_genre_count.png
 │       ├── platform_weighted_global_sales.png
 │       ├── steam_review_percentage_trend.png
