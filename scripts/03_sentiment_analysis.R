@@ -275,9 +275,9 @@ cat("\n✓ Plots saved:\n")
 cat("  - positive_ratio_distribution.png\n")
 cat("  - avg_sentiment_normalized.png\n")
 
-# ============================================
-# Part 14: Final Summary
-# ============================================
+# ================================================
+# Part 14: Summary for sentiment analysis Part I
+# ================================================
 
 cat("\n")
 cat("========================================\n")
