@@ -16,14 +16,14 @@ library(tidyverse)
 library(factoextra)  # For Elbow Plot & clustering visualization
 library(cluster)     # For K-means validation
 
-dir.create("plots", recursive = TRUE, showWarnings = FALSE)
-dir.create("results", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 # ---------------------------
 # 2. Load PCA Processed Data (Output from PCA Step)
 # ---------------------------
 cat("=== LOADING PCA DATA FOR CLUSTERING ===\n")
-game_data <- read.csv("results/data_with_pca.csv")
+game_data <- read.csv("data/results/data_with_pca.csv")
 
 # Check data structure
 cat("Dataset Dimensions:", dim(game_data), "\n")
@@ -42,13 +42,16 @@ cat("=== Clustering using PC1 & PC2 (77.49% variance explained) ===\n")
 # ---------------------------
 # 4. School Lecture Key: Elbow Method (Find OPTIMAL Number of Clusters) apprantly this crushs the R studio
 # ---------------------------
-#cat("\n=== RUNNING ELBOW METHOD TO DETERMINE BEST K ===\n")
+cat("\n=== RUNNING ELBOW METHOD TO DETERMINE BEST K ===\n")
 # Elbow plot = standard method from your class to select K
-#fviz_nbclust(cluster_input, kmeans, method = "wss") +
- # labs(title = "Elbow Method: Optimal Number of Clusters",
-  #     x = "Number of Clusters (K)",
-   #    y = "Total Within Sum of Squares") +
-#  theme_minimal()
+elbow_plot <- fviz_nbclust(cluster_input, kmeans, method = "wss") +
+  labs(title = "Elbow Method: Optimal Number of Clusters",
+       x = "Number of Clusters (K)",
+       y = "Total Within Sum of Squares") +
+  theme_minimal()
+
+print(elbow_plot)
+ggsave("data/plots/kmeans_elbow_method.png", plot = elbow_plot, width = 10, height = 7, dpi = 300)
 
 # ---------------------------
 # 5. K-Means Clustering (K=3: Industry Standard: Blockbuster / Mid-Tier / Indie)
@@ -114,18 +117,18 @@ cluster_plot <- fviz_cluster(kmeans_model, data = cluster_input,
   theme_minimal()
 
 print(cluster_plot)
-ggsave("plots/kmeans_market_segmentation.png", plot = cluster_plot, width = 10, height = 7, dpi = 300)
+ggsave("data/plots/kmeans_market_segmentation.png", plot = cluster_plot, width = 10, height = 7, dpi = 300)
 
 # ---------------------------
 # 10. Save Final Clustered Data (For Team Regression/Classification)
 # ---------------------------
-write.csv(game_data_final, "results/final_game_data_with_clusters.csv", row.names = FALSE)
+write.csv(game_data_final, "data/results/final_game_data_with_clusters.csv", row.names = FALSE)
 
 # ---------------------------
 # 11. Final Output Summary
 # ---------------------------
 cat("\n✅ CLUSTERING ANALYSIS COMPLETED SUCCESSFULLY!\n")
-cat("✅ Final File Saved: results/final_game_data_with_clusters.csv\n")
+cat("✅ Final File Saved: data/results/final_game_data_with_clusters.csv\n")
 cat("✅ Market Tiers Created: Blockbuster, Mid-Tier, Indie\n")
 cat("✅ Clusters based on PC1 (Publisher Strength) & PC2 (Year/Scale)\n")
 
