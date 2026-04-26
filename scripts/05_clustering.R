@@ -8,10 +8,6 @@
 # ---------------------------
 # 1. Setup Working Directory & Libraries
 # ---------------------------
-# Set to your project folder (SAME as PCA)
-setwd("C:/Users/Mikek/Desktop/HKU University/IIMT 2601 Codes for R/Group Project")
-getwd()
-
 # Install packages (RUN ONCE if missing)
 # install.packages(c("tidyverse", "factoextra", "cluster"))
 
@@ -24,7 +20,7 @@ library(cluster)     # For K-means validation
 # 2. Load PCA Processed Data (Output from PCA Step)
 # ---------------------------
 cat("=== LOADING PCA DATA FOR CLUSTERING ===\n")
-game_data <- read.csv("data_with_pca.csv")
+game_data <- read.csv("data/processed/data_with_pca.csv")
 
 # Check data structure
 cat("Dataset Dimensions:", dim(game_data), "\n")

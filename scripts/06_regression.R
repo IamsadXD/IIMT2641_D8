@@ -13,7 +13,7 @@ library(ROCR)
 library(ggplot2)
 
 #Data
-df_raw <- read.csv("master_dataset.csv", stringsAsFactors = FALSE)
+df_raw <- read.csv("data/processed/master_dataset.csv", stringsAsFactors = FALSE)
 
 cat("Raw dataset dimensions:", nrow(df_raw), "rows x", ncol(df_raw), "cols\n")
 str(df_raw[, c("global_sales", "commercial_success", "genre",

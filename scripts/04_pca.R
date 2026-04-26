@@ -1,6 +1,3 @@
-# Set working directory (UPDATE TO YOUR OWN PATH)
-setwd("C:/Users/Mikek/Desktop/HKU University/IIMT 2601 Codes for R/Group Project")
-getwd()
 # ==============================================
 # Video Game Sales Analysis: PCA for Predictor Reduction
 # Purpose: Reduce correlated pre-launch game attributes
@@ -20,19 +17,19 @@ library(corrplot)
 cat("=== LOADING RAW DATASETS ===\n")
 
 # Core game sales data from VGChartz
-vgchartz <- read.csv("vgchartz_raw.csv", stringsAsFactors = FALSE)
+vgchartz <- read.csv("data/raw/vgchartz_raw.csv", stringsAsFactors = FALSE)
 cat("✓ VGChartz: Rows =", nrow(vgchartz), "| Columns =", ncol(vgchartz), "\n")
 
 # Publisher annual sales metrics
-publisher_sales <- read.csv("publisher_market_sales_online.csv", stringsAsFactors = FALSE)
+publisher_sales <- read.csv("data/raw/publisher_market_sales_online.csv", stringsAsFactors = FALSE)
 cat("✓ Publisher Sales: Rows =", nrow(publisher_sales), "| Columns =", ncol(publisher_sales), "\n")
 
 # Console/platform sales data
-console_sales <- read.csv("console_sales_online.csv", stringsAsFactors = FALSE)
+console_sales <- read.csv("data/raw/console_sales_online.csv", stringsAsFactors = FALSE)
 cat("✓ Console Sales: Rows =", nrow(console_sales), "| Columns =", ncol(console_sales), "\n")
 
 # Publisher market share data
-publisher_share <- read.csv("publisher_market_share_template.csv", stringsAsFactors = FALSE)
+publisher_share <- read.csv("data/raw/publisher_market_share_template.csv", stringsAsFactors = FALSE)
 cat("✓ Publisher Share: Rows =", nrow(publisher_share), "| Columns =", ncol(publisher_share), "\n")
 
 # ==============================================
@@ -86,8 +83,8 @@ analysis_data <- final_data %>%
   drop_na(global_sales, market_share_pct, publisher_global_sales)
 
 # Save cleaned dataset for downstream analysis
-write.csv(analysis_data, "clean_for_pca_clustering.csv", row.names = FALSE)
-cat("\n✅ Cleaned data saved: clean_for_pca_clustering.csv\n")
+write.csv(analysis_data, "data/processed/clean_for_pca_clustering.csv", row.names = FALSE)
+cat("\n✅ Cleaned data saved: data/processed/clean_for_pca_clustering.csv\n")
 cat("Final Clean Dataset Rows:", nrow(analysis_data), "\n")
 
 # ==============================================
@@ -98,7 +95,7 @@ cat("Final Clean Dataset Rows:", nrow(analysis_data), "\n")
 cat("\n=== RUNNING PRINCIPAL COMPONENTS ANALYSIS ===\n")
 
 # Load cleaned data
-data <- read.csv("clean_for_pca_clustering.csv")
+data <- read.csv("data/processed/clean_for_pca_clustering.csv")
 
 # Select pre-launch numeric features for PCA
 pca_features <- data %>%
@@ -170,7 +167,7 @@ print(fviz_pca_biplot(pr.out,
 # Step 8: Save PCA Results for Clustering
 # ==============================================
 final_pca_data <- cbind(data, pr.out$x)
-write.csv(final_pca_data, "data_with_pca.csv", row.names = FALSE)
+write.csv(final_pca_data, "data/processed/data_with_pca.csv", row.names = FALSE)
 
 cat("\n✅ PCA ANALYSIS COMPLETED SUCCESSFULLY!")
 cat("\n✅ Output File Saved: data_with_pca.csv\n")

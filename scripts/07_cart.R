@@ -5,7 +5,7 @@ library(rpart.plot)
 library(caret)
 
 # Master dataset 
-master_data <- read_csv("master_dataset.csv")
+master_data <- read_csv("data/processed/master_dataset.csv")
 
 # Data Preparation 
 # Focus on attributes known at the time of "decision", pre-launch
