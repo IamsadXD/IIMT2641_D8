@@ -11,8 +11,8 @@ library(tidyverse)
 library(factoextra)
 library(corrplot)
 
-dir.create("plots", recursive = TRUE, showWarnings = FALSE)
-dir.create("results", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 # ==============================================
 # Step 1: Load All Raw Datasets
@@ -86,8 +86,8 @@ analysis_data <- final_data %>%
   drop_na(global_sales, market_share_pct, publisher_global_sales)
 
 # Save cleaned dataset for downstream analysis
-write.csv(analysis_data, "results/clean_for_pca_clustering.csv", row.names = FALSE)
-cat("\n✅ Cleaned data saved: results/clean_for_pca_clustering.csv\n")
+write.csv(analysis_data, "data/results/clean_for_pca_clustering.csv", row.names = FALSE)
+cat("\n✅ Cleaned data saved: data/results/clean_for_pca_clustering.csv\n")
 cat("Final Clean Dataset Rows:", nrow(analysis_data), "\n")
 
 # ==============================================
@@ -98,7 +98,7 @@ cat("Final Clean Dataset Rows:", nrow(analysis_data), "\n")
 cat("\n=== RUNNING PRINCIPAL COMPONENTS ANALYSIS ===\n")
 
 # Load cleaned data
-data <- read.csv("results/clean_for_pca_clustering.csv")
+data <- read.csv("data/results/clean_for_pca_clustering.csv")
 
 # Select pre-launch numeric features for PCA
 pca_features <- data %>%
@@ -136,7 +136,7 @@ importance <- pca_summary$importance
 # Step 7: PCA Visualizations (Report-Ready Plots)
 # ==============================================
 # Plot 1: Proportion of Variance + Cumulative Variance
-png("plots/pca_variance_explained.png", width = 1600, height = 700, res = 140)
+png("data/plots/pca_variance_explained.png", width = 1600, height = 700, res = 140)
 par(mfrow = c(1, 2))
 plot(importance[2,], 
      xlab = "Principal Component",
@@ -154,20 +154,19 @@ pr.out$rotation <- -pr.out$rotation
 pr.out$x <- -pr.out$x
 par(mfrow = c(1, 1))  # Reset layout to 1 plot per page
 
-# Use geom_ind to sample 1000 games (adjust n to your needs)
+# Use all available games in the PCA biplot
 biplot_obj <- fviz_pca_biplot(pr.out,
                       repel = TRUE,
                       col.var = "red",
                       col.ind = "steelblue",
                       geom.ind = "point",  # Only show points, no text labels for games
-                      pointsize = 0.5,     # Make game points smaller
-                      select.ind = list(name = "random", n = 1000)  # Sample 1000 games
+                      pointsize = 0.5     # Make game points smaller
 ) +
-  labs(title = "PCA Biplot: Pre-Launch Game Attributes (1000 Sampled Games)") +
+  labs(title = "PCA Biplot: Pre-Launch Game Attributes (All Games)") +
   theme_minimal()
 
 print(biplot_obj)
-ggsave("plots/pca_biplot_sampled.png", plot = biplot_obj, width = 11, height = 7, dpi = 300)
+ggsave("data/plots/pca_biplot_sampled.png", plot = biplot_obj, width = 11, height = 7, dpi = 300)
 
 
 
@@ -175,8 +174,8 @@ ggsave("plots/pca_biplot_sampled.png", plot = biplot_obj, width = 11, height = 7
 # Step 8: Save PCA Results for Clustering
 # ==============================================
 final_pca_data <- cbind(data, pr.out$x)
-write.csv(final_pca_data, "results/data_with_pca.csv", row.names = FALSE)
+write.csv(final_pca_data, "data/results/data_with_pca.csv", row.names = FALSE)
 
 cat("\n✅ PCA ANALYSIS COMPLETED SUCCESSFULLY!")
-cat("\n✅ Output File Saved: results/data_with_pca.csv\n")
+cat("\n✅ Output File Saved: data/results/data_with_pca.csv\n")
 

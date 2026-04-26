@@ -1,19 +1,26 @@
-setwd("~/University Courses/SEMESTER 4/IIMT2641/Assignments/Group Project")
-getwd()
+# Resolve project root from script location when run via Rscript.
+args <- commandArgs(trailingOnly = FALSE)
+file_arg <- "--file="
+script_entry <- grep(file_arg, args, value = TRUE)
+if (length(script_entry) > 0) {
+  script_path <- sub(file_arg, "", script_entry[1])
+  project_root <- normalizePath(file.path(dirname(script_path), ".."), mustWork = TRUE)
+  setwd(project_root)
+}
+cat("Working directory:", getwd(), "\n")
 
-dir.create("plots", recursive = TRUE, showWarnings = FALSE)
-dir.create("results", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 #Libraries
-install.packages(caTools)
-install.packages(car)
-install.packages(ROCR)
-install.packages(ggplot2)
-
-library(caTools)
-library(car)
-library(ROCR)
-library(ggplot2)
+required_packages <- c("caTools", "car", "ROCR", "ggplot2")
+missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing_packages) > 0) {
+  stop(paste("Missing required package(s):", paste(missing_packages, collapse = ", ")))
+}
+for (pkg in required_packages) {
+  library(pkg, character.only = TRUE)
+}
 
 #Data
 df_raw <- read.csv("data/processed/master_dataset.csv", stringsAsFactors = FALSE)
@@ -153,14 +160,14 @@ rmse_orig <- sqrt(mean((test$global_sales - test$pred_sales)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig))
 
 #Residual plots
-png("plots/lm_diagnostics.png", width = 1400, height = 1200, res = 140)
+png("data/plots/lm_diagnostics.png", width = 1400, height = 1200, res = 140)
 par(mfrow = c(2, 2))
 plot(lm_full, main = "Linear Regression Diagnostics")
 par(mfrow = c(1, 1))
 dev.off()
 
 #Actual vs Predicted (log scale)
-png("plots/lm_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
+png("data/plots/lm_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
 plot(test$log_sales, lm_pred_test,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
@@ -222,7 +229,7 @@ rmse_orig_p <- sqrt(mean((test_p$global_sales - test_p$pred_sales_p)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig_p))
 
 # Actual vs Predicted plot
-png("plots/lm_price_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
+png("data/plots/lm_price_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
 plot(test_p$log_sales, lm_pred_price,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
@@ -294,7 +301,7 @@ plot(roc_train,
      text.adj       = c(-0.2, 1.7),
      main           = "ROC Curve – Logistic Regression (Training Set)")
 
-png("plots/logit_roc_train.png", width = 1000, height = 700, res = 130)
+png("data/plots/logit_roc_train.png", width = 1000, height = 700, res = 130)
 plot(roc_train,
   colorize       = TRUE,
   print.cutoffs.at = seq(0, 1, 0.1),
@@ -342,7 +349,7 @@ plot(roc_test,
      text.adj         = c(-0.2, 1.7),
      main             = "ROC Curve – Logistic Regression (Test Set)")
 
-png("plots/logit_roc_test.png", width = 1000, height = 700, res = 130)
+png("data/plots/logit_roc_test.png", width = 1000, height = 700, res = 130)
 plot(roc_test,
   colorize         = TRUE,
   print.cutoffs.at = seq(0, 1, 0.1),
@@ -410,7 +417,7 @@ metrics_df <- data.frame(
   )
 )
 
-write.csv(metrics_df, "results/regression_metrics_summary.csv", row.names = FALSE)
+write.csv(metrics_df, "data/results/regression_metrics_summary.csv", row.names = FALSE)
 
 # Odds ratios
 cat("\n--- Odds Ratios (Price Logistic Model) ---\n")
