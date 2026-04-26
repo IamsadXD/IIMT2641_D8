@@ -1,6 +1,9 @@
 setwd("~/University Courses/SEMESTER 4/IIMT2641/Assignments/Group Project")
 getwd()
 
+dir.create("plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("results", recursive = TRUE, showWarnings = FALSE)
+
 #Libraries
 install.packages(caTools)
 install.packages(car)
@@ -150,17 +153,21 @@ rmse_orig <- sqrt(mean((test$global_sales - test$pred_sales)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig))
 
 #Residual plots
+png("plots/lm_diagnostics.png", width = 1400, height = 1200, res = 140)
 par(mfrow = c(2, 2))
 plot(lm_full, main = "Linear Regression Diagnostics")
 par(mfrow = c(1, 1))
+dev.off()
 
 #Actual vs Predicted (log scale)
+png("plots/lm_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
 plot(test$log_sales, lm_pred_test,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
      main = "Linear Regression: Actual vs Predicted (Test Set)",
      pch  = 16, col = rgb(0, 0, 1, 0.3))
 abline(0, 1, col = "red", lwd = 2)
+dev.off()
 
 #Example prediction for a new game
 cat("\n--- Example: Predict sales for a new game ---\n")
@@ -215,12 +222,14 @@ rmse_orig_p <- sqrt(mean((test_p$global_sales - test_p$pred_sales_p)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig_p))
 
 # Actual vs Predicted plot
+png("plots/lm_price_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
 plot(test_p$log_sales, lm_pred_price,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
      main = "Price Model - Linear Regression: Actual vs Predicted (Test Set)",
      pch  = 16, col = rgb(0.8, 0.2, 0, 0.4))
 abline(0, 1, col = "red", lwd = 2)
+dev.off()
 
 # Example prediction
 cat("\n--- Price Model Example: Predict sales for a new game ---\n")
@@ -285,6 +294,14 @@ plot(roc_train,
      text.adj       = c(-0.2, 1.7),
      main           = "ROC Curve – Logistic Regression (Training Set)")
 
+png("plots/logit_roc_train.png", width = 1000, height = 700, res = 130)
+plot(roc_train,
+  colorize       = TRUE,
+  print.cutoffs.at = seq(0, 1, 0.1),
+  text.adj       = c(-0.2, 1.7),
+  main           = "ROC Curve – Logistic Regression (Training Set)")
+dev.off()
+
 auc_train <- as.numeric(performance(rocr_pred_train, "auc")@y.values)
 cat(sprintf("\nAUC (Training Set): %.4f\n", auc_train))
 
@@ -325,6 +342,14 @@ plot(roc_test,
      text.adj         = c(-0.2, 1.7),
      main             = "ROC Curve – Logistic Regression (Test Set)")
 
+png("plots/logit_roc_test.png", width = 1000, height = 700, res = 130)
+plot(roc_test,
+  colorize         = TRUE,
+  print.cutoffs.at = seq(0, 1, 0.1),
+  text.adj         = c(-0.2, 1.7),
+  main             = "ROC Curve – Logistic Regression (Test Set)")
+dev.off()
+
 auc_test <- as.numeric(performance(rocr_pred_test, "auc")@y.values)
 cat(sprintf("\nAUC (Test Set): %.4f\n", auc_test))
 
@@ -357,6 +382,35 @@ print(summary(logit_price))
 cat("\n--- VIF (Price Logistic Model) ---\n")
 print(vif(logit_price))
 cat("\n No Multicollinearity \n")
+
+metrics_df <- data.frame(
+  metric = c(
+    "lm_r2_train",
+    "lm_r2_test",
+    "lm_rmse_log_test",
+    "lm_rmse_original_test",
+    "logit_accuracy_test",
+    "logit_sensitivity_test",
+    "logit_specificity_test",
+    "logit_precision_test",
+    "logit_auc_train",
+    "logit_auc_test"
+  ),
+  value = c(
+    r2_train,
+    r2_test,
+    rmse_test,
+    rmse_orig,
+    accuracy,
+    sensitivity,
+    specificity,
+    precision,
+    auc_train,
+    auc_test
+  )
+)
+
+write.csv(metrics_df, "results/regression_metrics_summary.csv", row.names = FALSE)
 
 # Odds ratios
 cat("\n--- Odds Ratios (Price Logistic Model) ---\n")

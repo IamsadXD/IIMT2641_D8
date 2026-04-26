@@ -16,11 +16,14 @@ library(tidyverse)
 library(factoextra)  # For Elbow Plot & clustering visualization
 library(cluster)     # For K-means validation
 
+dir.create("plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("results", recursive = TRUE, showWarnings = FALSE)
+
 # ---------------------------
 # 2. Load PCA Processed Data (Output from PCA Step)
 # ---------------------------
 cat("=== LOADING PCA DATA FOR CLUSTERING ===\n")
-game_data <- read.csv("data/processed/data_with_pca.csv")
+game_data <- read.csv("results/data_with_pca.csv")
 
 # Check data structure
 cat("Dataset Dimensions:", dim(game_data), "\n")
@@ -100,7 +103,7 @@ print(cluster_profile)
 # ---------------------------
 # 9. Clustering Visualization (Simple, Report-Ready)
 # ---------------------------
-fviz_cluster(kmeans_model, data = cluster_input,
+cluster_plot <- fviz_cluster(kmeans_model, data = cluster_input,
              geom = "point",
              pointsize = 0.8,
              palette = c("#E74C3C", "#3498DB", "#2ECC71"),
@@ -110,16 +113,19 @@ fviz_cluster(kmeans_model, data = cluster_input,
        color = "Market Tier") +
   theme_minimal()
 
+print(cluster_plot)
+ggsave("plots/kmeans_market_segmentation.png", plot = cluster_plot, width = 10, height = 7, dpi = 300)
+
 # ---------------------------
 # 10. Save Final Clustered Data (For Team Regression/Classification)
 # ---------------------------
-write.csv(game_data_final, "final_game_data_with_clusters.csv", row.names = FALSE)
+write.csv(game_data_final, "results/final_game_data_with_clusters.csv", row.names = FALSE)
 
 # ---------------------------
 # 11. Final Output Summary
 # ---------------------------
 cat("\n✅ CLUSTERING ANALYSIS COMPLETED SUCCESSFULLY!\n")
-cat("✅ Final File Saved: final_game_data_with_clusters.csv\n")
+cat("✅ Final File Saved: results/final_game_data_with_clusters.csv\n")
 cat("✅ Market Tiers Created: Blockbuster, Mid-Tier, Indie\n")
 cat("✅ Clusters based on PC1 (Publisher Strength) & PC2 (Year/Scale)\n")
 

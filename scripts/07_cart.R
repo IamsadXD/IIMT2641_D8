@@ -4,6 +4,9 @@ library(rpart)
 library(rpart.plot)
 library(caret)
 
+dir.create("plots", recursive = TRUE, showWarnings = FALSE)
+dir.create("results", recursive = TRUE, showWarnings = FALSE)
+
 # Master dataset 
 master_data <- read_csv("data/processed/master_dataset.csv")
 
@@ -42,12 +45,14 @@ best_cp <- fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"]
 pruned_fit <- prune(fit, cp = best_cp)
 
 # Visualisation
+png("plots/cart_final_tree.png", width = 1300, height = 900, res = 140)
 prp(pruned_fit, 
     extra = 104, 
     box.palette = "RdYlGn", 
     main = "Final CART: Predictors of Commercial Success",
     type = 4, 
     fallen.leaves = TRUE)
+dev.off()
 
 # Model Evaluation
 # Predict on the unseen Test Data
@@ -59,6 +64,9 @@ cat("\n--- MODEL PERFORMANCE SUMMARY ---\n")
 cat("Overall Accuracy:", round(conf_matrix$overall['Accuracy'] * 100, 2), "%\n")
 print(conf_matrix$table)
 
+confusion_df <- as.data.frame(conf_matrix$table)
+write.csv(confusion_df, "results/cart_confusion_matrix.csv", row.names = FALSE)
+
 # Importance Ranking
 importance <- pruned_fit$variable.importance
 importance_df <- data.frame(
@@ -68,3 +76,5 @@ importance_df <- data.frame(
 
 print("\n--- ATTRIBUTE IMPORTANCE RANKING ---")
 print(importance_df)
+
+write.csv(importance_df, "results/cart_attribute_importance.csv", row.names = FALSE)
