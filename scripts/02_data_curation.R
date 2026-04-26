@@ -149,12 +149,10 @@ if (!file.exists(steam_api_path)) {
 	stop("Missing data/raw/steam_api_raw.rds. Run scripts/01_data_scraping.R first.")
 }
 
-reviews_path <- file.path(raw_dir, "steam_reviews_raw.rds")
 market_share_path <- file.path(raw_dir, "publisher_market_share_template.csv")
 
 vg_raw <- read_csv(vg_path, show_col_types = FALSE)
 steam_raw <- readRDS(steam_api_path)
-reviews_raw <- if (file.exists(reviews_path)) readRDS(reviews_path) else tibble()
 market_share_raw <- if (file.exists(market_share_path)) {
 	read_csv(market_share_path, show_col_types = FALSE)
 } else {
@@ -227,48 +225,11 @@ market_share_clean <- market_share_raw %>%
 		.groups = "drop"
 	)
 
-message("[3/6] Creating sentiment score aggregates from review text...")
-
-if (nrow(reviews_raw) > 0) {
-	sentiment_scores <- reviews_raw %>%
-		mutate(
-			review_text = as.character(review_text),
-			review_word_count = str_count(coalesce(review_text, ""), "\\S+"),
-			voted_up = as.logical(voted_up),
-			weighted_vote_score = suppressWarnings(as.numeric(weighted_vote_score)),
-			votes_up = suppressWarnings(as.numeric(votes_up))
-		) %>%
-		group_by(appid) %>%
-		summarise(
-			review_count = n(),
-			pct_positive_review = mean(voted_up, na.rm = TRUE),
-			avg_weighted_vote_score = mean(weighted_vote_score, na.rm = TRUE),
-			avg_votes_up = mean(votes_up, na.rm = TRUE),
-			avg_review_word_count = mean(review_word_count, na.rm = TRUE),
-			.groups = "drop"
-		) %>%
-		mutate(across(where(is.numeric), ~ ifelse(is.nan(.x), NA_real_, .x)))
-} else {
-	sentiment_scores <- tibble(
-		appid = integer(),
-		review_count = integer(),
-		pct_positive_review = numeric(),
-		avg_weighted_vote_score = numeric(),
-		avg_votes_up = numeric(),
-		avg_review_word_count = numeric()
-	)
-}
-
-write_csv(sentiment_scores, file.path(processed_dir, "sentiment_scores.csv"))
-
-steam_enriched <- steam_clean %>%
-	left_join(sentiment_scores, by = "appid")
-
-message("[4/6] Joining datasets and engineering model-ready features...")
+message("[3/6] Joining datasets and engineering model-ready features...")
 
 master_dataset <- vg_clean %>%
 	left_join(
-		steam_enriched %>%
+		steam_clean %>%
 			select(
 				title_key,
 				appid,
@@ -285,12 +246,7 @@ master_dataset <- vg_clean %>%
 				tags,
 				windows,
 				mac,
-				linux,
-				review_count,
-				pct_positive_review,
-				avg_weighted_vote_score,
-				avg_votes_up,
-				avg_review_word_count
+				linux
 			),
 		by = "title_key"
 	) %>%
@@ -514,7 +470,6 @@ key_numeric_vars <- c(
 	"userscore",
 	"ccu",
 	"owner_midpoint",
-	"review_count",
 	"competitors"
 )
 
