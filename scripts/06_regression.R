@@ -2,6 +2,11 @@ setwd("~/University Courses/SEMESTER 4/IIMT2641/Assignments/Group Project")
 getwd()
 
 #Libraries
+install.packages(caTools)
+install.packages(car)
+install.packages(ROCR)
+install.packages(ggplot2)
+
 library(caTools)
 library(car)
 library(ROCR)
@@ -183,6 +188,7 @@ print(summary(lm_price))
 
 cat("\n--- VIF (Price Model) ---\n")
 print(vif(lm_price))
+cat("\n No Multicollinearity \n")
 
 # In-sample performance
 sse_train_p <- sum(lm_price$residuals^2)
@@ -250,6 +256,7 @@ print(summary(logit_full))
 #VIF check
 cat("\n--- VIF (Full Logistic Model) ---\n")
 print(vif(logit_full))
+cat("\n No Multicollinearity \n")
 
 #Odds ratios
 cat("\n--- Odds Ratios (Stepwise Logistic Model) ---\n")
@@ -346,8 +353,10 @@ logit_price <- glm(success_binary ~ specific_genre + platform_family +
                    family = binomial)
 print(summary(logit_price))
 
+#VIF Check
 cat("\n--- VIF (Price Logistic Model) ---\n")
 print(vif(logit_price))
+cat("\n No Multicollinearity \n")
 
 # Odds ratios
 cat("\n--- Odds Ratios (Price Logistic Model) ---\n")
