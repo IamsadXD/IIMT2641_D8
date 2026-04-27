@@ -12,9 +12,42 @@ library(ggplot2)
 # ============================================
 
 cat("=== LOADING DATA ===\n")
-steam_data <- read.csv("/Users/user/Downloads/steam_game_reviews_730945.csv") #change if needed
-cat("Total reviews:", nrow(steam_data), "\n")
-cat("Total unique games:", length(unique(steam_data$name)), "\n")
+steam_data <- read.csv("data/raw/steam_game_reviews_730945.csv") 
+cat("Total raw reviews:", nrow(steam_data), "\n")
+
+# Load master dataset first; use steamid to keep only related appids before cleaning
+master_data <- read.csv("data/processed/master_dataset.csv")
+
+if(!"appid" %in% names(steam_data)) {
+  stop("Column 'appid' not found in steam review data. Please include appid in input file.")
+}
+
+if(!"steamid" %in% names(master_data)) {
+  stop("Column 'steamid' not found in master_dataset.csv. Run scripts/02_data_curation.R first.")
+}
+
+steam_data <- steam_data %>%
+  mutate(appid = as.character(appid))
+
+master_steamids <- master_data %>%
+  mutate(steamid = as.character(steamid)) %>%
+  filter(!is.na(steamid), steamid != "") %>%
+  distinct(steamid)
+
+total_reviews_before_filter <- nrow(steam_data)
+unique_appids_before_filter <- n_distinct(steam_data$appid)
+
+steam_data <- steam_data %>%
+  filter(appid %in% master_steamids$steamid)
+
+cat("Unique appids in reviews (before filter):", unique_appids_before_filter, "\n")
+cat("Unique steamids in master dataset:", nrow(master_steamids), "\n")
+cat("Reviews after steamid/appid filter:", nrow(steam_data), "(removed", total_reviews_before_filter - nrow(steam_data), ")\n")
+cat("Unique games after filter:", length(unique(steam_data$name)), "\n")
+
+if(nrow(steam_data) == 0) {
+  stop("No review rows matched master_dataset steamids. Check appid/steamid format and source files.")
+}
 
 # ============================================
 # Part 2: Function to Clean Reviews
@@ -56,7 +89,8 @@ clean_review <- function(text) {
 # ============================================
 
 cat("\n=== CLEANING REVIEWS ===\n")
-cat("This will take 5-10 minutes for 730,945 reviews...\n")
+cat("Cleaning only rows matched to master_dataset steamids...\n")
+cat("Reviews to clean:", nrow(steam_data), "\n")
 
 # Clean all reviews
 steam_data$clean_review <- sapply(steam_data$review, clean_review)
@@ -106,9 +140,16 @@ cat("Neutral reviews:", sum(steam_data$sentiment_score == 0), "\n")
 
 cat("\n=== CREATING GAME SUMMARY ===\n")
 
+# Ensure appid exists before app-level aggregation
+if(!"appid" %in% names(steam_data)) {
+  stop("Column 'appid' not found in steam review data. Please include appid in input file.")
+}
+
 game_summary <- steam_data %>%
-  group_by(name) %>%
+  mutate(appid = as.character(appid)) %>%
+  group_by(appid) %>%
   summarise(
+    game_title = first(name),
     # Basic counts
     total_reviews = n(),
     positive_count = sum(is_positive, na.rm = TRUE),
@@ -134,9 +175,6 @@ game_summary <- steam_data %>%
     .groups = "drop"
   ) %>%
   arrange(desc(total_reviews))
-
-# Rename the first column to "game_title"
-colnames(game_summary)[1] <- "game_title"
 
 # ============================================
 # Part 6: Save the Game Summary File
@@ -211,17 +249,17 @@ cat(sprintf("Games with < 40%% positive: %d\n", sum(game_summary$positive_ratio 
 
 cat("\n=== CREATING MERGED DATA FOR ANALYSIS ===\n")
 
-# Read your master data (only need game_title and global_sales)
-master_data <- read.csv("/Users/user/Downloads/iimt2641/Grp/IIMT2641_D8/data/processed/master_dataset.csv")
-
-# Keep only the columns you need
+# Keep only the columns you need; join on steamid matched to review appid
 master_sales <- master_data %>%
-  select(game_title, global_sales) %>%
-  distinct(game_title, .keep_all = TRUE)  # Remove duplicates if any
+  mutate(steamid = as.character(steamid)) %>%
+  filter(!is.na(steamid), steamid != "") %>%
+  select(steamid, global_sales) %>%
+  distinct(steamid, .keep_all = TRUE) %>%
+  rename(appid = steamid)
 
 # Merge with your game summary (from Part 5)
 merged_analysis <- game_summary %>%
-  inner_join(master_sales, by = "game_title")
+  inner_join(master_sales, by = "appid")
 
 cat("Merged data size:", nrow(merged_analysis), "games\n")
 cat("Games with sales data:", sum(!is.na(merged_analysis$global_sales)), "\n")

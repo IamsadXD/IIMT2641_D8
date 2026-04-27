@@ -251,6 +251,7 @@ master_dataset <- vg_clean %>%
 		by = "title_key"
 	) %>%
 	mutate(
+		steamid = as.character(appid),
 		year_for_join = coalesce(release_year, steam_release_year),
 		market_publisher_key = coalesce(publisher_key, normalize_key(steam_publisher))
 	) %>%
@@ -290,6 +291,7 @@ master_dataset <- master_dataset %>%
 	)
 
 all_missing_cols <- names(master_dataset)[vapply(master_dataset, function(col) all(is.na(col)), logical(1))]
+all_missing_cols <- setdiff(all_missing_cols, "steamid")
 if (length(all_missing_cols) > 0) {
 	message(
 		"Dropping columns with 100% missing values: ",
