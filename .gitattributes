@@ -1,2 +1,4 @@
 data/raw/steam_game_reviews_730945.csv filter=lfs diff=lfs merge=lfs -text
 data/raw/*.csv filter=lfs diff=lfs merge=lfs -text
+/Users/user/Downloads/iimt2641/Grp/data/raw/steam_info_cache.csv filter=lfs diff=lfs merge=lfs -text
+/Users/user/Downloads/iimt2641/Grp/data/raw/steam_info_cache.csv.gz filter=lfs diff=lfs merge=lfs -text
