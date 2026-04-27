@@ -12,7 +12,7 @@ library(ggplot2)
 # ============================================
 
 cat("=== LOADING DATA ===\n")
-steam_data <- read.csv("/Users/user/Downloads/steam_game_reviews_730945.csv") #change if needed
+steam_data <- read.csv("data/raw/steam_game_reviews_730945.csv")
 cat("Total reviews:", nrow(steam_data), "\n")
 cat("Total unique games:", length(unique(steam_data$name)), "\n")
 
