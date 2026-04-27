@@ -456,14 +456,15 @@ plot_year_trend <- master_dataset %>%
 	group_by(release_year) %>%
 	summarise(game_count = n(), .groups = "drop") %>%
 	ggplot(aes(x = release_year, y = game_count)) +
-	geom_line(color = "#1F7A8C", linewidth = 1) +
-	geom_point(color = "#1F7A8C", size = 1.5) +
+	geom_col(fill = "#1F7A8C", width = 0.8) +
+	scale_x_continuous(breaks = pretty_breaks(n = 12)) +
 	labs(
 		title = "Number of Games by Release Year",
 		x = "Release Year",
 		y = "Game Count"
 	) +
-	theme_minimal(base_size = 13)
+	theme_minimal(base_size = 13) +
+	theme(axis.text.x = element_text(angle = 45, hjust = 1))
 save_plot(plot_year_trend, "games_by_release_year_count.png")
 
 key_numeric_vars <- c(
