@@ -11,7 +11,9 @@ library(tidyverse)
 library(factoextra)
 library(corrplot)
 
-dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+plots_dir <- "data/plots/04_pca"
+
+dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 # ==============================================
@@ -136,7 +138,7 @@ importance <- pca_summary$importance
 # Step 7: PCA Visualizations (Report-Ready Plots)
 # ==============================================
 # Plot 1: Proportion of Variance + Cumulative Variance
-png("data/plots/pca_variance_explained.png", width = 1600, height = 700, res = 140)
+png(file.path(plots_dir, "pca_variance_explained.png"), width = 1600, height = 700, res = 140)
 par(mfrow = c(1, 2))
 plot(importance[2,], 
      xlab = "Principal Component",
@@ -166,7 +168,7 @@ biplot_obj <- fviz_pca_biplot(pr.out,
   theme_minimal()
 
 print(biplot_obj)
-ggsave("data/plots/pca_biplot_sampled.png", plot = biplot_obj, width = 11, height = 7, dpi = 300)
+ggsave(file.path(plots_dir, "pca_biplot_sampled.png"), plot = biplot_obj, width = 11, height = 7, dpi = 300)
 
 
 

@@ -7,6 +7,9 @@ library(syuzhet)
 library(dplyr)
 library(ggplot2)
 
+plot_output_dir <- "data/plots/sentiment_analysis_output"
+dir.create(plot_output_dir, recursive = TRUE, showWarnings = FALSE)
+
 # ============================================
 # Part 1: Load Data
 # ============================================
@@ -181,7 +184,7 @@ game_summary <- steam_data %>%
 # ============================================
 
 # Save full summary
-write.csv(game_summary, "data/plots/sentiment_analysis_output/game_sentiment_summary_full.csv", row.names = FALSE)
+write.csv(game_summary, file.path(plot_output_dir, "game_sentiment_summary_full.csv"), row.names = FALSE)
 cat("\n✓ Saved: data/plots/sentiment_analysis_output/game_sentiment_summary_full.csv\n")
 cat("  Total games in summary:", nrow(game_summary), "\n")
 
@@ -265,7 +268,7 @@ cat("Merged data size:", nrow(merged_analysis), "games\n")
 cat("Games with sales data:", sum(!is.na(merged_analysis$global_sales)), "\n")
 
 # Save merged data for analysis
-write.csv(merged_analysis, "data/plots/sentiment_analysis_output/merged_sentiment_sales.csv", row.names = FALSE)
+write.csv(merged_analysis, file.path(plot_output_dir, "merged_sentiment_sales.csv"), row.names = FALSE)
 cat("✓ Saved: data/plots/sentiment_analysis_output/merged_sentiment_sales.csv\n")
 
 # ============================================
@@ -373,9 +376,6 @@ cat(sprintf("\n✓ %d out of %d metrics show statistically significant correlati
 
 cat("\n=== GENERATING PLOTS ===\n")
 
-# Create directory for plots
-dir.create("data/plots/sentiment_analysis_output", recursive = TRUE, showWarnings = FALSE)
-
 # Plot 1: Positive Ratio vs Sales
 p3 <- ggplot(analysis_data, aes(x = positive_ratio, y = global_sales)) +
   geom_point(alpha = 0.6, color = "steelblue", size = 2) +
@@ -385,7 +385,7 @@ p3 <- ggplot(analysis_data, aes(x = positive_ratio, y = global_sales)) +
        y = "Global Sales (millions)") +
   theme_minimal()
 print(p3)
-ggsave("data/plots/sentiment_analysis_output/correlation_posratio_vs_sales.png", p3, width = 8, height = 6, dpi = 300)
+ggsave(file.path(plot_output_dir, "correlation_posratio_vs_sales.png"), p3, width = 8, height = 6, dpi = 300)
 
 # Plot 2: Average Sentiment Score vs Sales
 p4 <- ggplot(analysis_data, aes(x = avg_sentiment_score, y = global_sales)) +
@@ -396,7 +396,7 @@ p4 <- ggplot(analysis_data, aes(x = avg_sentiment_score, y = global_sales)) +
        y = "Global Sales (millions)") +
   theme_minimal()
 print(p4)
-ggsave("data/plots/sentiment_analysis_output/correlation_avgsentiment_vs_sales.png", p4, width = 8, height = 6, dpi = 300)
+ggsave(file.path(plot_output_dir, "correlation_avgsentiment_vs_sales.png"), p4, width = 8, height = 6, dpi = 300)
 
 # Plot 3: Sentiment SD (Controversy) vs Sales
 p5 <- ggplot(analysis_data, aes(x = sd_sentiment_score, y = global_sales)) +
@@ -407,7 +407,7 @@ p5 <- ggplot(analysis_data, aes(x = sd_sentiment_score, y = global_sales)) +
        y = "Global Sales (millions)") +
   theme_minimal()
 print(p5)
-ggsave("data/plots/sentiment_analysis_output/correlation_sd_vs_sales.png", p5, width = 8, height = 6, dpi = 300)
+ggsave(file.path(plot_output_dir, "correlation_sd_vs_sales.png"), p5, width = 8, height = 6, dpi = 300)
 
 # Plot 4: Total Reviews vs Sales
 p6 <- ggplot(analysis_data, aes(x = total_reviews, y = global_sales)) +
@@ -418,10 +418,10 @@ p6 <- ggplot(analysis_data, aes(x = total_reviews, y = global_sales)) +
        y = "Global Sales (millions)") +
   theme_minimal()
 print(p6)
-ggsave("data/plots/sentiment_analysis_output/correlation_reviews_vs_sales.png", p6, width = 8, height = 6, dpi = 300)
+ggsave(file.path(plot_output_dir, "correlation_reviews_vs_sales.png"), p6, width = 8, height = 6, dpi = 300)
 
 # Save Correlation Results
-write.csv(correlation_results, "data/plots/sentiment_analysis_output/correlation_results.csv", row.names = FALSE)
+write.csv(correlation_results, file.path(plot_output_dir, "correlation_results.csv"), row.names = FALSE)
 cat("\n✓ Saved: correlation_results.csv\n")
 
 # ============================================
@@ -518,7 +518,7 @@ create_wordcloud_teacher <- function(text_vector, title_name, min_freq = 2) {
 
 # Step 5: Create and save side-by-side word clouds
 # Set up 1x2 plotting area
-png(filename = "data/plots/sentiment_analysis_output/controversial_game_wordcloud.png", 
+png(filename = file.path(plot_output_dir, "controversial_game_wordcloud.png"), 
     width = 12, height = 6, units = "in", res = 300)
 
 par(mfrow = c(1, 2), mar = c(1, 1, 3, 1))

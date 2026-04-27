@@ -16,7 +16,9 @@ library(tidyverse)
 library(factoextra)  # For Elbow Plot & clustering visualization
 library(cluster)     # For K-means validation
 
-dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+plots_dir <- "data/plots/05_clustering"
+
+dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 # ---------------------------
@@ -51,7 +53,7 @@ elbow_plot <- fviz_nbclust(cluster_input, kmeans, method = "wss") +
   theme_minimal()
 
 print(elbow_plot)
-ggsave("data/plots/kmeans_elbow_method.png", plot = elbow_plot, width = 10, height = 7, dpi = 300)
+ggsave(file.path(plots_dir, "kmeans_elbow_method.png"), plot = elbow_plot, width = 10, height = 7, dpi = 300)
 
 # ---------------------------
 # 5. K-Means Clustering (K=3: Industry Standard: Blockbuster / Mid-Tier / Indie)
@@ -117,7 +119,7 @@ cluster_plot <- fviz_cluster(kmeans_model, data = cluster_input,
   theme_minimal()
 
 print(cluster_plot)
-ggsave("data/plots/kmeans_market_segmentation.png", plot = cluster_plot, width = 10, height = 7, dpi = 300)
+ggsave(file.path(plots_dir, "kmeans_market_segmentation.png"), plot = cluster_plot, width = 10, height = 7, dpi = 300)
 
 # ---------------------------
 # 10. Save Final Clustered Data (For Team Regression/Classification)

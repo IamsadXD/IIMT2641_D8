@@ -56,24 +56,6 @@ empty_steam_api_table <- function() {
 	)
 }
 
-empty_steam_reviews_table <- function() {
-	tibble(
-		appid = integer(),
-		review_id = character(),
-		review_text = character(),
-		voted_up = logical(),
-		votes_up = numeric(),
-		votes_funny = numeric(),
-		weighted_vote_score = numeric(),
-		comment_count = numeric(),
-		steam_purchase = logical(),
-		received_for_free = logical(),
-		written_during_early_access = logical(),
-		timestamp_created = numeric(),
-		author_num_reviews = numeric()
-	)
-}
-
 rename_first_existing <- function(df, target, candidates) {
 	matched <- intersect(candidates, names(df))
 	if (length(matched) > 0 && matched[1] != target) {
@@ -142,7 +124,7 @@ processed_dir <- file.path(project_root, "data", "processed")
 dir.create(raw_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
 
-message("[1/4] Scraping console-inclusive sales datasets from online sources...")
+message("[1/3] Scraping console-inclusive sales datasets from online sources...")
 
 online_sales_sources <- tribble(
 	~source_name, ~source_url,
@@ -249,7 +231,7 @@ write_csv(
 	file.path(raw_dir, "publisher_market_share_template.csv")
 )
 
-message("[2/4] Pulling Steam data via SteamKit-powered endpoints...")
+message("[2/3] Pulling Steam data via SteamKit-powered endpoints...")
 
 extract_association_names <- function(associations, assoc_type) {
 	if (length(associations) == 0) {
@@ -1100,42 +1082,10 @@ if (file.exists(file.path(raw_dir, "kaggle_vgsales.csv"))) {
 	write_csv(vg_data, file.path(raw_dir, "kaggle_vgsales.csv"))
 }
 
-message("[3/4] Building Steam review summary rows from SteamKit metadata...")
-
-if (nrow(steam_api_raw) > 0) {
-	steam_reviews_raw <- steam_api_raw %>%
-		transmute(
-			appid = as.integer(appid),
-			review_id = paste0("steamkit_summary_", as.integer(appid)),
-			review_text = NA_character_,
-			voted_up = ifelse(is.na(userscore), NA, userscore >= 70),
-			votes_up = NA_real_,
-			votes_funny = NA_real_,
-			weighted_vote_score = ifelse(is.na(userscore), NA_real_, userscore / 100),
-			comment_count = NA_real_,
-			steam_purchase = NA,
-			received_for_free = NA,
-			written_during_early_access = NA,
-			timestamp_created = suppressWarnings(as.numeric(as.POSIXct(release_date, format = "%m/%d/%Y", tz = "UTC"))),
-			author_num_reviews = NA_real_
-		)
-
-	steam_reviews_raw <- bind_rows(
-		empty_steam_reviews_table(),
-		steam_reviews_raw
-	)
-} else {
-	steam_reviews_raw <- empty_steam_reviews_table()
-	message("No SteamKit metadata rows available. Writing empty steam_reviews_raw.rds.")
-}
-
-saveRDS(steam_reviews_raw, file.path(raw_dir, "steam_reviews_raw.rds"))
-
-message("[4/4] Publisher market share data prepared from online sales sources.")
+message("[3/3] Publisher market share data prepared from online sales sources.")
 
 message("Data scraping completed.")
 message("Rows written -> vgchartz_raw.csv: ", nrow(vg_data))
 message("Rows written -> publisher_market_sales_online.csv: ", nrow(publisher_market_sales))
 message("Rows written -> steam_api_raw.rds: ", nrow(steam_api_raw))
-message("Rows written -> steam_reviews_raw.rds: ", nrow(steam_reviews_raw))
 

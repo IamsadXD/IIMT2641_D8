@@ -15,9 +15,11 @@ project_root <- normalizePath(file.path(getwd(), "."), winslash = "/", mustWork 
 raw_dir <- file.path(project_root, "data", "raw")
 processed_dir <- file.path(project_root, "data", "processed")
 plots_dir <- file.path(project_root, "data", "plots")
+overview_plots_dir <- file.path(plots_dir, "02_data_curation_overview")
 
 dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(overview_plots_dir, recursive = TRUE, showWarnings = FALSE)
 
 normalize_key <- function(x) {
 	x %>%
@@ -125,9 +127,9 @@ high <- suppressWarnings(as.numeric(str_squish(split_ranges[, 2])))
 ifelse(is.na(low) | is.na(high), NA_real_, (low + high) / 2)
 }
 
-save_plot <- function(plot_obj, filename, width = 11, height = 7) {
+save_plot <- function(plot_obj, filename, width = 11, height = 7, output_dir = overview_plots_dir) {
 	ggsave(
-		filename = file.path(plots_dir, filename),
+		filename = file.path(output_dir, filename),
 		plot = plot_obj,
 		width = width,
 		height = height,
@@ -306,17 +308,19 @@ write_csv(master_dataset, file.path(processed_dir, "master_dataset.csv"))
 message("[5/6] Building overview plots for numeric, categorical, temporal, and text-derived features...")
 
 plot_top_genre <- master_dataset %>%
-	filter(!is.na(genre), genre != "", str_to_lower(genre) != "other") %>%
+	filter(!is.na(genre), genre != "") %>%
 	group_by(genre) %>%
 	summarise(game_count = n(), .groups = "drop") %>%
-	filter(game_count >= 20) %>%
+	arrange(desc(game_count)) %>%
+	slice_head(n = 15) %>%
 	mutate(genre = fct_reorder(genre, game_count)) %>%
 	ggplot(aes(x = genre, y = game_count)) +
 	geom_col(fill = "#3B8EA5") +
 	coord_flip() +
 	scale_y_continuous(labels = label_number()) +
 	labs(
-		title = "Number of Games by Genre (n >= 20)",
+		title = "Top 15 Genres by Number of Games",
+		subtitle = paste0("Total games in this study: ", label_number()(nrow(master_dataset))),
 		x = "Genre",
 		y = "Game Count"
 	) +
@@ -499,19 +503,6 @@ key_variable_overview <- master_dataset %>%
 
 write_csv(key_variable_overview, file.path(processed_dir, "key_variable_overview.csv"))
 
-plot_key_missing <- key_variable_overview %>%
-	mutate(variable = fct_reorder(variable, missing_pct)) %>%
-	ggplot(aes(x = variable, y = missing_pct)) +
-	geom_col(fill = "#7A306C") +
-	coord_flip() +
-	labs(
-		title = "Missing Percentage of Key Variables",
-		x = "Variable",
-		y = "Missing (%)"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_key_missing, "key_variables_missing_percentage.png")
-
 plot_key_non_missing <- key_variable_overview %>%
 	mutate(variable = fct_reorder(variable, non_missing)) %>%
 	ggplot(aes(x = variable, y = non_missing)) +
@@ -531,40 +522,24 @@ plot_specific_genre_competition <- master_dataset %>%
 	group_by(specific_genre) %>%
 	summarise(avg_competitors = mean(competitors, na.rm = TRUE), n = n(), .groups = "drop") %>%
 	filter(n >= 20) %>%
+	mutate(label_n = paste0("n=", label_number()(n))) %>%
 	mutate(specific_genre = fct_reorder(specific_genre, avg_competitors)) %>%
 	ggplot(aes(x = specific_genre, y = avg_competitors)) +
 	geom_col(fill = "#4C956C") +
+	geom_text(aes(label = label_n), hjust = -0.1, size = 3.2) +
 	coord_flip() +
+	scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
 	labs(
 		title = "Average Same-Genre Competitors at Release",
+		subtitle = paste0("Total games with competition data: ", label_number()(sum(!is.na(master_dataset$competitors)))),
 		x = "Specific Genre",
 		y = "Average Competitors"
 	) +
 	theme_minimal(base_size = 13)
 save_plot(plot_specific_genre_competition, "specific_genre_competition_overview.png")
 
-missing_df <- master_dataset %>%
-	summarise(across(everything(), ~ mean(is.na(.x)))) %>%
-	pivot_longer(cols = everything(), names_to = "variable", values_to = "missing_ratio") %>%
-	arrange(desc(missing_ratio)) %>%
-	slice_head(n = 20)
-
-plot_missing <- missing_df %>%
-	mutate(variable = fct_reorder(variable, missing_ratio)) %>%
-	ggplot(aes(x = variable, y = missing_ratio)) +
-	geom_col(fill = "#6C757D") +
-	coord_flip() +
-	scale_y_continuous(labels = label_percent(accuracy = 1)) +
-	labs(
-		title = "Top 20 Variables by Missingness",
-		x = "Variable",
-		y = "Missing Ratio"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_missing, "top_variables_missingness.png")
-
 message("[6/6] Data curation completed.")
 message("Master rows: ", nrow(master_dataset))
 message("Master columns: ", ncol(master_dataset))
-message("Plots written to: data/plots")
+message("Overview plots written to: data/plots/02_data_curation_overview")
 

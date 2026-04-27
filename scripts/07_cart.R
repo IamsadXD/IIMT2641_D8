@@ -4,7 +4,9 @@ library(rpart)
 library(rpart.plot)
 library(caret)
 
-dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+plots_dir <- "data/plots/07_cart"
+
+dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 # Master dataset 
@@ -45,7 +47,7 @@ best_cp <- fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"]
 pruned_fit <- prune(fit, cp = best_cp)
 
 # Visualisation
-png("data/plots/cart_final_tree.png", width = 1300, height = 900, res = 140)
+png(file.path(plots_dir, "cart_final_tree.png"), width = 1300, height = 900, res = 140)
 prp(pruned_fit, 
     extra = 104, 
     box.palette = "RdYlGn", 

@@ -9,7 +9,9 @@ if (length(script_entry) > 0) {
 }
 cat("Working directory:", getwd(), "\n")
 
-dir.create("data/plots", recursive = TRUE, showWarnings = FALSE)
+plots_dir <- "data/plots/06_regression"
+
+dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
 dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
 
 #Libraries
@@ -160,14 +162,14 @@ rmse_orig <- sqrt(mean((test$global_sales - test$pred_sales)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig))
 
 #Residual plots
-png("data/plots/lm_diagnostics.png", width = 1400, height = 1200, res = 140)
+png(file.path(plots_dir, "lm_diagnostics.png"), width = 1400, height = 1200, res = 140)
 par(mfrow = c(2, 2))
 plot(lm_full, main = "Linear Regression Diagnostics")
 par(mfrow = c(1, 1))
 dev.off()
 
 #Actual vs Predicted (log scale)
-png("data/plots/lm_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
+png(file.path(plots_dir, "lm_actual_vs_predicted.png"), width = 1000, height = 700, res = 130)
 plot(test$log_sales, lm_pred_test,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
@@ -229,7 +231,7 @@ rmse_orig_p <- sqrt(mean((test_p$global_sales - test_p$pred_sales_p)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig_p))
 
 # Actual vs Predicted plot
-png("data/plots/lm_price_actual_vs_predicted.png", width = 1000, height = 700, res = 130)
+png(file.path(plots_dir, "lm_price_actual_vs_predicted.png"), width = 1000, height = 700, res = 130)
 plot(test_p$log_sales, lm_pred_price,
      xlab = "Actual log(Global Sales)",
      ylab = "Predicted log(Global Sales)",
@@ -301,7 +303,7 @@ plot(roc_train,
      text.adj       = c(-0.2, 1.7),
      main           = "ROC Curve – Logistic Regression (Training Set)")
 
-png("data/plots/logit_roc_train.png", width = 1000, height = 700, res = 130)
+png(file.path(plots_dir, "logit_roc_train.png"), width = 1000, height = 700, res = 130)
 plot(roc_train,
   colorize       = TRUE,
   print.cutoffs.at = seq(0, 1, 0.1),
@@ -349,7 +351,7 @@ plot(roc_test,
      text.adj         = c(-0.2, 1.7),
      main             = "ROC Curve – Logistic Regression (Test Set)")
 
-png("data/plots/logit_roc_test.png", width = 1000, height = 700, res = 130)
+png(file.path(plots_dir, "logit_roc_test.png"), width = 1000, height = 700, res = 130)
 plot(roc_test,
   colorize         = TRUE,
   print.cutoffs.at = seq(0, 1, 0.1),

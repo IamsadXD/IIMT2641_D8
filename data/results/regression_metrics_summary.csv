@@ -1,0 +1,11 @@
+"metric","value"
+"lm_r2_train",0.263343360739194
+"lm_r2_test",0.267144210995532
+"lm_rmse_log_test",1.26707940888861
+"lm_rmse_original_test",2.18946320337399
+"logit_accuracy_test",0.735744832501782
+"logit_sensitivity_test",0.568022440392707
+"logit_specificity_test",0.792881032011467
+"logit_precision_test",0.483005366726297
+"logit_auc_train",0.768328281820801
+"logit_auc_test",0.758458703927943
