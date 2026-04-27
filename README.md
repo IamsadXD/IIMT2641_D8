@@ -7,31 +7,35 @@ project_root/
 │
 ├── data/
 │   ├── raw/
-│   │   ├── console_sales_online.csv           # Combined online console-inclusive sales data
-│   │   ├── vgchartz_raw.csv                   # Standardized core sales dataset
-│   │   ├── publisher_market_sales_online.csv  # Publisher-year sales and market-share metrics
-│   │   ├── publisher_market_share_template.csv # Publisher-year market share table for joins
-│   │   ├── steam_api_raw.rds                  # Steam game attributes snapshot
-│   │   ├── steam_reviews_raw.rds              # Steam review text snapshot
-│   │   └── kaggle_vgsales.csv                 # Local copy/fallback of standardized sales data
+│   │   ├── console_sales_online.csv
+│   │   ├── kaggle_vgsales.csv
+│   │   ├── publisher_market_sales_online.csv
+│   │   ├── publisher_market_share_template.csv
+│   │   ├── steam_api_raw.rds
+│   │   ├── steam_game_reviews_730945.csv
+│   │   ├── steam_info_cache.csv
+│   │   ├── steam_match_cache.csv
+│   │   ├── steam_search_attempt_cache.csv
+│   │   └── vgchartz_raw.csv
 │   ├── processed/
-│       ├── master_dataset.csv        # Final joined and encoded analysis-ready dataset
-│       ├── sentiment_scores.csv      # Per-game aggregated sentiment metrics
-│       ├── key_variable_overview.csv # Coverage/stats summary of key variables
-│       └── publisher_overview.csv    # Publisher-level overview metrics
+│   │   ├── key_variable_overview.csv
+│   │   ├── master_dataset.csv
+│   │   └── publisher_overview.csv
 │   └── plots/
-|       ├── sentiment_analysis/
-│       ├── games_by_genre_count.png
-│       ├── platform_weighted_global_sales.png
-│       ├── steam_review_percentage_trend.png
-│       ├── games_by_release_year_count.png
-│       ├── key_variables_missing_percentage.png
-│       ├── key_variables_non_missing_count.png
-│       ├── top_variables_missingness.png
-│       ├── specific_genre_competition_overview.png
-│       ├── top_publishers_total_global_sales.png
-│       ├── publisher_sales_overview_bubble.png
-│       └── top_publishers_market_share_trend.png
+│       ├── 02_data_curation_overview/
+│       ├── 04_pca/
+│       ├── 05_clustering/
+│       ├── 06_regression/
+│       ├── 07_cart/
+│       └── sentiment_analysis_output/
+│           ├── controversial_game_wordcloud.png
+│           ├── correlation_avgsentiment_vs_sales.png
+│           ├── correlation_posratio_vs_sales.png
+│           ├── correlation_results.csv
+│           ├── correlation_reviews_vs_sales.png
+│           ├── correlation_sd_vs_sales.png
+│           ├── game_sentiment_summary_full.csv
+│           └── merged_sentiment_sales.csv
 │
 ├── scripts/
 │   ├── 01_data_scraping.R          # Collect raw data from VGChartz, Steam API, and Steam Reviews - Jacob
@@ -47,16 +51,16 @@ project_root/
 
 ## Data Sources
 
-This project uses a multi-source data pipeline combining online game-sales sources, Steam platform metadata, and repository-generated raw files.
+This project uses a multi-source pipeline combining online game-sales sources, Steam platform metadata endpoints, and local review snapshots.
 
 ### 1. Console-inclusive game sales (online)
 
 - vgsales_andvise
 	- https://raw.githubusercontent.com/andvise/DataAnalyticsDatasets/main/vgsales.csv
-	- Used fields: title, platform, year, genre, publisher, regional sales, global sales.
+	- Used fields (standardized): game title, platform, release year, genre, publisher, regional sales, global sales.
 - vgsales_saemaqazi
 	- https://raw.githubusercontent.com/saemaqazi/vgsales.csv/main/vgsales.csv
-	- Used fields: title, platform, year, genre, publisher, regional sales, global sales.
+	- Used fields (standardized): game title, platform, release year, genre, publisher, regional sales, global sales.
 - vgchartz_2024
 	- https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv
 	- Used fields (normalized): title, console/platform, release date/year, genre, publisher, regional sales, global sales.
@@ -70,9 +74,9 @@ This project uses a multi-source data pipeline combining online game-sales sourc
 	- https://api.steamcmd.net/v1/info/{appid}
 	- Used fields: name, developer/publisher associations, review percentage, genres/tags identifiers, release date, and OS support.
 
-Note: Steam review text API is intentionally disabled in this pipeline. The file [data/raw/steam_reviews_raw.rds](data/raw/steam_reviews_raw.rds) is currently an empty placeholder unless a dedicated non-synthetic review source is configured.
+Note: this pipeline does not pull full review text from the Steam API in [scripts/01_data_scraping.R](scripts/01_data_scraping.R). Sentiment analysis in [scripts/03_sentiment_analysis.R](scripts/03_sentiment_analysis.R) uses the local review snapshot [data/raw/steam_game_reviews_730945.csv](data/raw/steam_game_reviews_730945.csv).
 
-### 3. Raw data files generated in this repository
+### 3. Raw data files produced or maintained in this repository
 
 - [data/raw/console_sales_online.csv](data/raw/console_sales_online.csv)
 	- Combined and standardized online console-inclusive sales records.
@@ -83,7 +87,13 @@ Note: Steam review text API is intentionally disabled in this pipeline. The file
 - [data/raw/publisher_market_share_template.csv](data/raw/publisher_market_share_template.csv)
 	- Publisher-year market share table used in joins during curation.
 - [data/raw/steam_api_raw.rds](data/raw/steam_api_raw.rds)
-	- Steam metadata snapshot.
-- [data/raw/steam_reviews_raw.rds](data/raw/steam_reviews_raw.rds)
-	- Steam review snapshot for sentiment feature construction.
+	- Steam metadata snapshot from the Steam endpoints.
+- [data/raw/steam_game_reviews_730945.csv](data/raw/steam_game_reviews_730945.csv)
+	- Local Steam review text snapshot used for sentiment scoring.
+- [data/raw/steam_info_cache.csv](data/raw/steam_info_cache.csv)
+	- Cache of app-level Steam info responses.
+- [data/raw/steam_match_cache.csv](data/raw/steam_match_cache.csv)
+	- Cache of title-to-appid matching results.
+- [data/raw/steam_search_attempt_cache.csv](data/raw/steam_search_attempt_cache.csv)
+	- Cache of search attempts and fallback queries during app matching.
 
