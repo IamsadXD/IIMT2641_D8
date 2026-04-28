@@ -249,6 +249,26 @@ or_df <- data.frame(
   stringsAsFactors = FALSE
 )
 or_df <- or_df[or_df$term != "(Intercept)", ]
+
+# Keep only the 5 most statistically significant terms (smallest p-values)
+coef_summary <- summary(logit_full)$coefficients
+p_df <- data.frame(
+  term = rownames(coef_summary),
+  p_value = coef_summary[, "Pr(>|z|)"],
+  stringsAsFactors = FALSE
+)
+p_df <- p_df[p_df$term != "(Intercept)", ]
+
+or_df <- merge(or_df, p_df, by = "term", all.x = TRUE)
+sig_df <- or_df[!is.na(or_df$p_value) & or_df$p_value < 0.05, ]
+
+if (nrow(sig_df) >= 5) {
+  or_df <- sig_df[order(sig_df$p_value), ]
+} else {
+  or_df <- or_df[order(or_df$p_value), ]
+}
+or_df <- head(or_df, 5)
+
 or_df$term <- factor(or_df$term, levels = or_df$term[order(or_df$or)])
 
 gg_or <- ggplot(or_df, aes(x = term, y = or)) +
