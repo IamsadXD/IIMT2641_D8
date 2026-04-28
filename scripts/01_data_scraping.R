@@ -128,8 +128,7 @@ message("[1/3] Scraping console-inclusive sales datasets from online sources..."
 
 online_sales_sources <- tribble(
 	~source_name, ~source_url,
-	"vgsales_andvise", "https://raw.githubusercontent.com/andvise/DataAnalyticsDatasets/main/vgsales.csv",
-	"vgsales_saemaqazi", "https://raw.githubusercontent.com/saemaqazi/vgsales.csv/main/vgsales.csv",
+	"vgsales_codingwitho", "https://raw.githubusercontent.com/CodingwithO/VideoGameSales/master/vgsales.csv",
 	"vgchartz_2024", "https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv"
 )
 
