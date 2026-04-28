@@ -111,7 +111,7 @@ derive_specific_genre <- function(primary_genre, steam_genres, steam_tags, game_
 		str_detect(genre_text, "shooter") ~ "shooter",
 		str_detect(genre_text, "role[- ]?playing|\\brpg\\b") ~ "rpg",
 		str_detect(genre_text, "action") ~ "action",
-		TRUE ~ "other"
+		TRUE ~ primary_genre
 	)
 }
 
@@ -275,17 +275,37 @@ master_dataset <- vg_clean %>%
 			!is.na(release_year) & release_year >= 2015 ~ "2015_plus",
 			TRUE ~ "unknown"
 		)
+	)
+
+master_dataset <- master_dataset %>%
+	mutate(row_id = row_number())
+
+competition_base <- master_dataset %>%
+	select(row_id, specific_genre, release_year_competition) %>%
+	filter(!is.na(specific_genre), !is.na(release_year_competition))
+
+competition_counts <- competition_base %>%
+	inner_join(
+		competition_base %>% rename_with(~paste0(., "_ref"), -specific_genre),
+		by = "specific_genre",
+		relationship = "many-to-many"
 	) %>%
-	group_by(release_year_competition, specific_genre) %>%
+	filter(
+		release_year_competition <= release_year_competition_ref,
+		row_id != row_id_ref
+	) %>%
+	count(row_id, name = "competitors")
+
+master_dataset <- master_dataset %>%
+	left_join(competition_counts, by = "row_id") %>%
 	mutate(
 		competitors = if_else(
 			is.na(release_year_competition) | is.na(specific_genre),
 			NA_integer_,
-			as.integer(pmax(n() - 1L, 0L))
+			as.integer(coalesce(competitors, 0L))
 		)
 	) %>%
-	ungroup() %>%
-	select(-release_year_competition)
+	select(-release_year_competition, -row_id)
 
 master_dataset <- master_dataset %>%
 	mutate(
