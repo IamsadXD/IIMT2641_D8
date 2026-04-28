@@ -1,6 +1,3 @@
-setwd("~/University Courses/SEMESTER 4/IIMT2641/Assignments/Group Project")
-getwd()
-
 #Libraries
 install.packages("caTools")
 install.packages("car")
@@ -12,9 +9,14 @@ library(car)
 library(ROCR)
 library(ggplot2)
 
+plots_dir <- "data/plots/06_regression"
+
+dir.create(plots_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create("data/results", recursive = TRUE, showWarnings = FALSE)
+
 #Data
-df_raw  <- read.csv("master_dataset.csv",    stringsAsFactors = FALSE)
-pub_raw <- read.csv("publisher_overview.csv", stringsAsFactors = FALSE)
+df_raw  <- read.csv("data/processed/master_dataset.csv",    stringsAsFactors = FALSE)
+pub_raw <- read.csv("data/processed/publisher_overview.csv", stringsAsFactors = FALSE)
 
 cat("Raw dataset dimensions:", nrow(df_raw), "rows x", ncol(df_raw), "cols\n")
 cat("Publisher overview dimensions:", nrow(pub_raw), "rows x", ncol(pub_raw), "cols\n")
@@ -160,17 +162,21 @@ rmse_orig <- sqrt(mean((test$global_sales - test$pred_sales)^2))
 cat(sprintf("  RMSE (original scale, M$) : %.4f\n", rmse_orig))
 
 #Residual plots
+png(file.path(plots_dir, "linear_regression_diagnostics.png"), width = 1600, height = 1200, res = 140)
 par(mfrow = c(2, 2))
 plot(lm_full, main = "Linear Regression Diagnostics")
 par(mfrow = c(1, 1))
+dev.off()
 
 #Actual vs Predicted (log scale)
+png(file.path(plots_dir, "linear_regression_actual_vs_predicted.png"), width = 1200, height = 900, res = 140)
 plot(test$log_sales, lm_pred_test,
-     xlab = "Actual log(Global Sales)",
-     ylab = "Predicted log(Global Sales)",
-     main = "Linear Regression: Actual vs Predicted (Test Set)",
-     pch  = 16, col = rgb(0, 0, 1, 0.3))
+  xlab = "Actual log(Global Sales)",
+  ylab = "Predicted log(Global Sales)",
+  main = "Linear Regression: Actual vs Predicted (Test Set)",
+  pch  = 16, col = rgb(0, 0, 1, 0.3))
 abline(0, 1, col = "red", lwd = 2)
+dev.off()
 
 #Example prediction for a new game
 cat("\n--- Example: Predict sales for a new game ---\n")
@@ -234,11 +240,13 @@ cat(sprintf("Training accuracy (t=0.30): %.4f\n", accuracy_train))
 rocr_pred_train <- prediction(pred_train_prob, train$success_binary)
 roc_train       <- performance(rocr_pred_train, "tpr", "fpr")
 
+png(file.path(plots_dir, "logistic_regression_roc_train.png"), width = 1200, height = 900, res = 140)
 plot(roc_train,
-     colorize       = TRUE,
-     print.cutoffs.at = seq(0, 1, 0.1),
-     text.adj       = c(-0.2, 1.7),
-     main           = "ROC Curve – Logistic Regression (Training Set)")
+  colorize       = TRUE,
+  print.cutoffs.at = seq(0, 1, 0.1),
+  text.adj       = c(-0.2, 1.7),
+  main           = "ROC Curve – Logistic Regression (Training Set)")
+dev.off()
 
 auc_train <- as.numeric(performance(rocr_pred_train, "auc")@y.values)
 cat(sprintf("\nAUC (Training Set): %.4f\n", auc_train))
@@ -274,11 +282,13 @@ cat(sprintf("  Baseline accuracy (all 'low'): %.4f\n", baseline_acc))
 rocr_pred_test <- prediction(pred_test_prob, test$success_binary)
 roc_test       <- performance(rocr_pred_test, "tpr", "fpr")
 
+png(file.path(plots_dir, "logistic_regression_roc_test.png"), width = 1200, height = 900, res = 140)
 plot(roc_test,
-     colorize         = TRUE,
-     print.cutoffs.at = seq(0, 1, 0.1),
-     text.adj         = c(-0.2, 1.7),
-     main             = "ROC Curve – Logistic Regression (Test Set)")
+  colorize         = TRUE,
+  print.cutoffs.at = seq(0, 1, 0.1),
+  text.adj         = c(-0.2, 1.7),
+  main             = "ROC Curve – Logistic Regression (Test Set)")
+dev.off()
 
 auc_test <- as.numeric(performance(rocr_pred_test, "auc")@y.values)
 cat(sprintf("\nAUC (Test Set): %.4f\n", auc_test))
