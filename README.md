@@ -8,7 +8,6 @@ project_root/
 ├── data/
 │   ├── raw/
 │   │   ├── console_sales_online.csv
-│   │   ├── kaggle_vgsales.csv
 │   │   ├── publisher_market_sales_online.csv
 │   │   ├── publisher_market_share_template.csv
 │   │   ├── steam_api_raw.rds
@@ -55,10 +54,6 @@ This project uses a multi-source pipeline combining online game-sales sources, S
 
 ### 1. Console-inclusive game sales (online)
 
-- vgsales_codingwitho
-	- https://raw.githubusercontent.com/CodingwithO/VideoGameSales/master/vgsales.csv
-	- Used fields (standardized): game title, platform, release year, genre, publisher, regional sales, global sales.
-	- Note: This is a consolidated historical video game sales dataset combining multiple sources.
 - vgchartz_2024
 	- https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv
 	- Used fields (normalized): title, console/platform, release date/year, genre, publisher, regional sales, global sales.

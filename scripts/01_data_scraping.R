@@ -128,7 +128,6 @@ message("[1/3] Scraping console-inclusive sales datasets from online sources..."
 
 online_sales_sources <- tribble(
 	~source_name, ~source_url,
-	"vgsales_codingwitho", "https://raw.githubusercontent.com/CodingwithO/VideoGameSales/master/vgsales.csv",
 	"vgchartz_2024", "https://raw.githubusercontent.com/Bredmak/vgchartz-sales-analysis/main/vgchartz-2024.csv"
 )
 
@@ -162,8 +161,7 @@ if (nrow(online_sales_data) > 0) {
 
 	local_vg_candidates <- c(
 		file.path(raw_dir, "console_sales_online.csv"),
-		file.path(raw_dir, "vgchartz_raw.csv"),
-		file.path(raw_dir, "kaggle_vgsales.csv")
+		file.path(raw_dir, "vgchartz_raw.csv")
 	)
 
 	for (local_path in local_vg_candidates) {
@@ -1074,12 +1072,6 @@ if (is.null(vg_data) || nrow(vg_data) == 0) {
 vg_data <- standardize_sales_schema(vg_data)
 
 write_csv(vg_data, file.path(raw_dir, "vgchartz_raw.csv"))
-
-if (file.exists(file.path(raw_dir, "kaggle_vgsales.csv"))) {
-	message("kaggle_vgsales.csv already exists in data/raw; keeping existing file.")
-} else {
-	write_csv(vg_data, file.path(raw_dir, "kaggle_vgsales.csv"))
-}
 
 message("[3/3] Publisher market share data prepared from online sales sources.")
 
