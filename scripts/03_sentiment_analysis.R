@@ -18,7 +18,7 @@ dir.create(plot_output_dir, recursive = TRUE, showWarnings = FALSE)
 # ============================================
 
 cat("=== LOADING DATA ===\n")
-steam_data <- read.csv("/Users/user/Downloads/steam_game_reviews_730945 2.csv") 
+steam_data <- read.csv("data/raw/steam_game_reviews_730945.csv") 
 cat("Total raw reviews:", nrow(steam_data), "\n")
 
 # Load master dataset
