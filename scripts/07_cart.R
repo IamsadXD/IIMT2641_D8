@@ -47,7 +47,7 @@ best_cp <- fit$cptable[which.min(fit$cptable[,"xerror"]),"CP"]
 pruned_fit <- prune(fit, cp = best_cp)
 
 # Visualisation
-png(file.path(plots_dir, "cart_final_tree.png"), width = 1300, height = 900, res = 140)
+png(file.path(plots_dir, "cart_final_tree.png"), width = 3200, height = 2200, res = 300)
 prp(pruned_fit, 
     extra = 104, 
     box.palette = "RdYlGn", 
