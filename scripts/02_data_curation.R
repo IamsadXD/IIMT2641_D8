@@ -151,15 +151,8 @@ if (!file.exists(steam_api_path)) {
 	stop("Missing data/raw/steam_api_raw.rds. Run scripts/01_data_scraping.R first.")
 }
 
-market_share_path <- file.path(raw_dir, "publisher_market_share_template.csv")
-
 vg_raw <- read_csv(vg_path, show_col_types = FALSE)
 steam_raw <- readRDS(steam_api_path)
-market_share_raw <- if (file.exists(market_share_path)) {
-	read_csv(market_share_path, show_col_types = FALSE)
-} else {
-	tibble(publisher = character(), year = integer(), market_share_pct = numeric(), source_url = character())
-}
 
 vg_input <- standardize_sales_schema(vg_raw) %>%
 	mutate(data_source = "vgchartz")
@@ -192,6 +185,36 @@ vg_clean <- vg_input %>%
 	) %>%
 	filter(!is.na(game_title), game_title != "")
 
+message("[3/6] Computing derived market share metrics...")
+
+market_share_raw <- vg_clean %>%
+	filter(
+		!is.na(publisher),
+		publisher != "",
+		!is.na(release_year),
+		!is.na(global_sales),
+		global_sales > 0
+	) %>%
+	group_by(publisher, release_year) %>%
+	summarise(
+		publisher_global_sales = sum(global_sales, na.rm = TRUE),
+		game_count = n(),
+		.groups = "drop"
+	) %>%
+	group_by(release_year) %>%
+	mutate(
+		year_total_sales = sum(publisher_global_sales, na.rm = TRUE),
+		market_share_pct = ifelse(
+			year_total_sales > 0,
+			100 * publisher_global_sales / year_total_sales,
+			NA_real_
+		)
+	) %>%
+	ungroup() %>%
+	select(publisher, year = release_year, market_share_pct)
+
+write_csv(market_share_raw, file.path(processed_dir, "publisher_market_share_derived.csv"))
+
 steam_clean <- steam_raw %>%
 	mutate(
 		game_title = str_squish(as.character(game_title)),
@@ -214,10 +237,8 @@ steam_clean <- steam_raw %>%
 
 market_share_clean <- market_share_raw %>%
 	mutate(
-		publisher = str_squish(as.character(publisher)),
-		year = suppressWarnings(as.integer(year)),
-		market_share_pct = suppressWarnings(as.numeric(market_share_pct)),
-		publisher_key = normalize_key(publisher)
+		publisher_key = normalize_key(publisher),
+		year = as.integer(year)
 	) %>%
 	filter(!is.na(publisher_key), publisher_key != "", !is.na(year), !is.na(market_share_pct)) %>%
 	group_by(publisher_key, year) %>%
@@ -227,7 +248,7 @@ market_share_clean <- market_share_raw %>%
 		.groups = "drop"
 	)
 
-message("[3/6] Joining datasets and engineering model-ready features...")
+message("[4/6] Joining datasets and engineering model-ready features...")
 
 master_dataset <- vg_clean %>%
 	left_join(

@@ -176,58 +176,6 @@ if (nrow(online_sales_data) > 0) {
 	}
 }
 
-publisher_market_input <- if (nrow(online_sales_data) > 0) {
-	online_sales_data %>%
-		select(game_title, release_year, genre, publisher, platform, global_sales, source_url)
-} else {
-	vg_data %>%
-		mutate(source_url = "local_cache_or_fallback") %>%
-		select(game_title, release_year, genre, publisher, platform, global_sales, source_url)
-}
-
-publisher_market_sales <- publisher_market_input %>%
-	mutate(
-		publisher = str_squish(as.character(publisher)),
-		release_year = suppressWarnings(as.integer(release_year)),
-		global_sales = suppressWarnings(as.numeric(global_sales))
-	) %>%
-	filter(
-		!is.na(publisher),
-		publisher != "",
-		!is.na(release_year),
-		!is.na(global_sales),
-		global_sales > 0
-	) %>%
-	group_by(publisher, release_year) %>%
-	summarise(
-		publisher_global_sales = sum(global_sales, na.rm = TRUE),
-		game_count = n(),
-		avg_sales_per_game = mean(global_sales, na.rm = TRUE),
-		platform_count = n_distinct(platform),
-		genre_count = n_distinct(genre),
-		source_url = paste(sort(unique(source_url)), collapse = " | "),
-		.groups = "drop"
-	) %>%
-	group_by(release_year) %>%
-	mutate(
-		year_total_sales = sum(publisher_global_sales, na.rm = TRUE),
-		market_share_pct = ifelse(
-			year_total_sales > 0,
-			100 * publisher_global_sales / year_total_sales,
-			NA_real_
-		),
-		publisher_rank_in_year = min_rank(desc(publisher_global_sales))
-	) %>%
-	ungroup() %>%
-	rename(year = release_year)
-
-write_csv(publisher_market_sales, file.path(raw_dir, "publisher_market_sales_online.csv"))
-write_csv(
-	publisher_market_sales %>%
-		select(publisher, year, market_share_pct, source_url),
-	file.path(raw_dir, "publisher_market_share_template.csv")
-)
-
 message("[2/3] Pulling Steam data via SteamKit-powered endpoints...")
 
 extract_association_names <- function(associations, assoc_type) {
@@ -1073,10 +1021,9 @@ vg_data <- standardize_sales_schema(vg_data)
 
 write_csv(vg_data, file.path(raw_dir, "vgchartz_raw.csv"))
 
-message("[3/3] Publisher market share data prepared from online sales sources.")
+message("[3/3] Raw data collection completed.")
 
 message("Data scraping completed.")
 message("Rows written -> vgchartz_raw.csv: ", nrow(vg_data))
-message("Rows written -> publisher_market_sales_online.csv: ", nrow(publisher_market_sales))
 message("Rows written -> steam_api_raw.rds: ", nrow(steam_api_raw))
 

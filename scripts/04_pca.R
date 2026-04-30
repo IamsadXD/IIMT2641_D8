@@ -34,7 +34,7 @@ console_sales <- read.csv("data/raw/console_sales_online.csv", stringsAsFactors 
 cat("✓ Console Sales: Rows =", nrow(console_sales), "| Columns =", ncol(console_sales), "\n")
 
 # Publisher market share data
-publisher_share <- read.csv("data/raw/publisher_market_share_template.csv", stringsAsFactors = FALSE)
+publisher_share <- read.csv("data/processed/publisher_market_share_derived.csv", stringsAsFactors = FALSE)
 cat("✓ Publisher Share: Rows =", nrow(publisher_share), "| Columns =", ncol(publisher_share), "\n")
 
 # ==============================================
