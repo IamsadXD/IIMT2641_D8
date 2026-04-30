@@ -318,17 +318,19 @@ competition_base <- master_dataset %>%
 	select(row_id, specific_genre, release_year_competition) %>%
 	filter(!is.na(specific_genre), !is.na(release_year_competition))
 
+genre_year_counts <- competition_base %>%
+	count(specific_genre, release_year_competition, name = "year_count")
+
+genre_year_suffix <- genre_year_counts %>%
+	arrange(specific_genre, desc(release_year_competition)) %>%
+	group_by(specific_genre) %>%
+	mutate(suffix_count = cumsum(year_count)) %>%
+	ungroup()
+
 competition_counts <- competition_base %>%
-	inner_join(
-		competition_base %>% rename_with(~paste0(., "_ref"), -specific_genre),
-		by = "specific_genre",
-		relationship = "many-to-many"
-	) %>%
-	filter(
-		release_year_competition <= release_year_competition_ref,
-		row_id != row_id_ref
-	) %>%
-	count(row_id, name = "competitors")
+	left_join(genre_year_suffix, by = c("specific_genre", "release_year_competition")) %>%
+	mutate(competitors = as.integer(suffix_count - 1L)) %>%
+	select(row_id, competitors)
 
 master_dataset <- master_dataset %>%
 	left_join(competition_counts, by = "row_id") %>%
@@ -361,25 +363,25 @@ write_csv(master_dataset, file.path(processed_dir, "master_dataset.csv"))
 
 message("[5/6] Building overview plots for numeric, categorical, temporal, and text-derived features...")
 
-plot_top_genre <- master_dataset %>%
-	filter(!is.na(genre), genre != "") %>%
-	group_by(genre) %>%
+plot_top_specific_genre <- master_dataset %>%
+	filter(!is.na(specific_genre), as.character(specific_genre) != "", as.character(specific_genre) != "other") %>%
+	group_by(specific_genre) %>%
 	summarise(game_count = n(), .groups = "drop") %>%
 	arrange(desc(game_count)) %>%
 	slice_head(n = 15) %>%
-	mutate(genre = fct_reorder(genre, game_count)) %>%
-	ggplot(aes(x = genre, y = game_count)) +
+	mutate(specific_genre = fct_reorder(specific_genre, game_count)) %>%
+	ggplot(aes(x = specific_genre, y = game_count)) +
 	geom_col(fill = "#3B8EA5") +
 	coord_flip() +
 	scale_y_continuous(labels = label_number()) +
 	labs(
-		title = "Top 15 Genres by Number of Games",
+		title = "Top 15 Specific Genres by Number of Games",
 		subtitle = paste0("Total games in this study: ", label_number()(nrow(master_dataset))),
-		x = "Genre",
+		x = "Specific Genre",
 		y = "Game Count"
 	) +
 	theme_minimal(base_size = 13)
-save_plot(plot_top_genre, "games_by_genre_count.png")
+save_plot(plot_top_specific_genre, "games_by_specific_genre_count.png")
 
 plot_platform_mix <- master_dataset %>%
 	filter(!is.na(platform), platform != "") %>%
@@ -577,11 +579,9 @@ plot_specific_genre_competition <- master_dataset %>%
 	group_by(specific_genre) %>%
 	summarise(avg_competitors = mean(competitors, na.rm = TRUE), n = n(), .groups = "drop") %>%
 	filter(n >= 20) %>%
-	mutate(label_n = paste0("n=", label_number()(n))) %>%
 	mutate(specific_genre = fct_reorder(specific_genre, avg_competitors)) %>%
 	ggplot(aes(x = specific_genre, y = avg_competitors)) +
 	geom_col(fill = "#4C956C") +
-	geom_text(aes(label = label_n), hjust = -0.1, size = 3.2) +
 	coord_flip() +
 	scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
 	labs(
