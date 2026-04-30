@@ -199,6 +199,9 @@ market_share_raw <- vg_clean %>%
 	summarise(
 		publisher_global_sales = sum(global_sales, na.rm = TRUE),
 		game_count = n(),
+		avg_sales_per_game = mean(global_sales, na.rm = TRUE),
+		platform_count = n_distinct(platform),
+		genre_count = n_distinct(genre),
 		.groups = "drop"
 	) %>%
 	group_by(release_year) %>%
@@ -208,12 +211,22 @@ market_share_raw <- vg_clean %>%
 			year_total_sales > 0,
 			100 * publisher_global_sales / year_total_sales,
 			NA_real_
-		)
+		),
+		publisher_rank_in_year = min_rank(desc(publisher_global_sales))
 	) %>%
 	ungroup() %>%
-	select(publisher, year = release_year, market_share_pct)
+	rename(year = release_year)
 
-write_csv(market_share_raw, file.path(processed_dir, "publisher_market_share_derived.csv"))
+publisher_market_sales <- market_share_raw
+
+# Write per-year publisher sales (processed)
+write_csv(publisher_market_sales, file.path(processed_dir, "publisher_market_sales_derived.csv"))
+
+# Also write a compact publisher-year -> market share table for joins
+market_share_derived <- publisher_market_sales %>%
+    select(publisher, year, market_share_pct)
+
+write_csv(market_share_derived, file.path(processed_dir, "publisher_market_share_derived.csv"))
 
 steam_clean <- steam_raw %>%
 	mutate(

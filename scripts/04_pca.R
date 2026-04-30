@@ -25,8 +25,8 @@ cat("=== LOADING RAW DATASETS ===\n")
 vgchartz <- read.csv("data/raw/vgchartz_raw.csv", stringsAsFactors = FALSE)
 cat("✓ VGChartz: Rows =", nrow(vgchartz), "| Columns =", ncol(vgchartz), "\n")
 
-# Publisher annual sales metrics
-publisher_sales <- read.csv("data/raw/publisher_market_sales_online.csv", stringsAsFactors = FALSE)
+# Publisher annual sales metrics (processed)
+publisher_sales <- read.csv("data/processed/publisher_market_sales_derived.csv", stringsAsFactors = FALSE)
 cat("✓ Publisher Sales: Rows =", nrow(publisher_sales), "| Columns =", ncol(publisher_sales), "\n")
 
 # Console/platform sales data
