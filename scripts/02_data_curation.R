@@ -383,53 +383,6 @@ plot_top_specific_genre <- master_dataset %>%
 	theme_minimal(base_size = 13)
 save_plot(plot_top_specific_genre, "games_by_specific_genre_count.png")
 
-plot_platform_mix <- master_dataset %>%
-	filter(!is.na(platform), platform != "") %>%
-	mutate(platform = fct_lump_n(platform, n = 10, other_level = "Other")) %>%
-	filter(platform != "Other") %>%
-	count(platform, wt = global_sales, name = "weighted_sales") %>%
-	mutate(platform = fct_reorder(platform, weighted_sales)) %>%
-	ggplot(aes(x = platform, y = weighted_sales, fill = platform)) +
-	geom_col(show.legend = FALSE) +
-	coord_flip() +
-	scale_y_continuous(labels = label_number()) +
-	labs(
-		title = "Weighted Sales by Platform",
-		x = "Platform",
-		y = "Total Global Sales (millions)"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_platform_mix, "platform_weighted_global_sales.png")
-
-steam_plot_data <- steam_clean %>%
-	filter(!is.na(userscore), !is.na(steam_release_year), is.finite(userscore)) %>%
-	mutate(
-		deployment_type = case_when(
-			windows & (mac | linux) ~ "cross_platform",
-			windows & !(mac | linux) ~ "windows_only",
-			mac | linux ~ "non_windows",
-			TRUE ~ "unknown"
-		)
-	)
-
-if (nrow(steam_plot_data) >= 10) {
-	plot_steam_userscore_trend <- steam_plot_data %>%
-		ggplot(aes(x = steam_release_year, y = userscore, color = deployment_type)) +
-		geom_point(alpha = 0.45) +
-		geom_smooth(method = "lm", se = FALSE, linewidth = 0.9) +
-		scale_y_continuous(labels = label_number(accuracy = 1)) +
-		labs(
-			title = "Steam Review Percentage by Release Year",
-			x = "Steam Release Year",
-			y = "Review Percentage",
-			color = "Platform Support"
-		) +
-		theme_minimal(base_size = 13)
-	save_plot(plot_steam_userscore_trend, "steam_review_percentage_trend.png")
-} else {
-	message("Skipping steam_review_percentage_trend.png due to insufficient Steam data.")
-}
-
 publisher_overview <- master_dataset %>%
 	filter(!is.na(publisher), publisher != "") %>%
 	group_by(publisher) %>%
@@ -453,21 +406,6 @@ publisher_overview <- master_dataset %>%
 
 write_csv(publisher_overview, file.path(processed_dir, "publisher_overview.csv"))
 
-plot_publisher_sales <- publisher_overview %>%
-	slice_head(n = 20) %>%
-	mutate(publisher = fct_reorder(publisher, total_global_sales)) %>%
-	ggplot(aes(x = publisher, y = total_global_sales)) +
-	geom_col(fill = "#6D597A") +
-	coord_flip() +
-	scale_y_continuous(labels = label_number()) +
-	labs(
-		title = "Top 20 Publishers by Total Global Sales",
-		x = "Publisher",
-		y = "Total Global Sales (millions)"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_publisher_sales, "top_publishers_total_global_sales.png")
-
 plot_publisher_bubble <- publisher_overview %>%
 	filter(game_count >= 5, is.finite(total_global_sales), is.finite(avg_sales_per_game)) %>%
 	slice_head(n = 40) %>%
@@ -486,42 +424,6 @@ plot_publisher_bubble <- publisher_overview %>%
 	) +
 	theme_minimal(base_size = 13)
 save_plot(plot_publisher_bubble, "publisher_sales_overview_bubble.png")
-
-top_publishers <- publisher_overview %>%
-	slice_head(n = 8) %>%
-	pull(publisher)
-
-plot_publisher_share_trend <- market_share_clean %>%
-	filter(publisher %in% top_publishers) %>%
-	group_by(publisher, year) %>%
-	summarise(market_share_pct = mean(market_share_pct, na.rm = TRUE), .groups = "drop") %>%
-	ggplot(aes(x = year, y = market_share_pct, color = publisher)) +
-	geom_line(linewidth = 0.9) +
-	geom_point(size = 1.6) +
-	labs(
-		title = "Market Share Trend of Top Publishers",
-		x = "Year",
-		y = "Market Share (%)",
-		color = "Publisher"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_publisher_share_trend, "top_publishers_market_share_trend.png")
-
-plot_year_trend <- master_dataset %>%
-	filter(!is.na(release_year)) %>%
-	group_by(release_year) %>%
-	summarise(game_count = n(), .groups = "drop") %>%
-	ggplot(aes(x = release_year, y = game_count)) +
-	geom_col(fill = "#1F7A8C", width = 0.8) +
-	scale_x_continuous(breaks = pretty_breaks(n = 12)) +
-	labs(
-		title = "Number of Games by Release Year",
-		x = "Release Year",
-		y = "Game Count"
-	) +
-	theme_minimal(base_size = 13) +
-	theme(axis.text.x = element_text(angle = 45, hjust = 1))
-save_plot(plot_year_trend, "games_by_release_year_count.png")
 
 key_numeric_vars <- c(
 	"global_sales",
@@ -559,20 +461,6 @@ key_variable_overview <- master_dataset %>%
 	mutate(missing_pct = round(missing_pct * 100, 2))
 
 write_csv(key_variable_overview, file.path(processed_dir, "key_variable_overview.csv"))
-
-plot_key_non_missing <- key_variable_overview %>%
-	mutate(variable = fct_reorder(variable, non_missing)) %>%
-	ggplot(aes(x = variable, y = non_missing)) +
-	geom_col(fill = "#2A6F97") +
-	coord_flip() +
-	scale_y_continuous(labels = label_number()) +
-	labs(
-		title = "Non-Missing Records of Key Variables",
-		x = "Variable",
-		y = "Record Count"
-	) +
-	theme_minimal(base_size = 13)
-save_plot(plot_key_non_missing, "key_variables_non_missing_count.png")
 
 plot_specific_genre_competition <- master_dataset %>%
 	filter(!is.na(specific_genre), !is.na(competitors), as.character(specific_genre) != "other") %>%
